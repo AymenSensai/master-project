@@ -1,0 +1,131 @@
+import argparse
+import os
+import torch
+import torch.optim as optim
+from torch.optim.lr_scheduler import StepLR
+import time
+
+from utils import load_config, setup_logger, save_checkpoint, set_seed
+from dataset import get_dataloader
+from model import build_model
+from losses import CrossSpectralLoss
+
+def train_epoch(model, dataloader, criterion, optimizer, device, epoch, logger):
+    model.train()
+    running_loss = 0.0
+    running_ce = 0.0
+    running_triplet = 0.0
+    
+    start_time = time.time()
+    
+    for i, (images, labels, domains) in enumerate(dataloader):
+        images = images.to(device)
+        labels = labels.to(device)
+        domains = domains.to(device)
+        
+        optimizer.zero_grad()
+        
+        # Forward pass
+        embeds, logits = model(images, domain=domains)
+        
+        # Losses
+        loss, loss_ce, loss_triplet = criterion(embeds, logits, labels)
+        
+        # Backward and optimize
+        loss.backward()
+        optimizer.step()
+        
+        running_loss += loss.item()
+        running_ce += loss_ce.item()
+        running_triplet += loss_triplet.item()
+        
+        if (i + 1) % 10 == 0:
+            logger.info(f"Epoch [{epoch}], Step [{i+1}/{len(dataloader)}], "
+                        f"Loss: {loss.item():.4f} "
+                        f"(CE: {loss_ce.item():.4f}, Triplet: {loss_triplet.item():.4f})")
+                        
+    epoch_loss = running_loss / len(dataloader)
+    epoch_time = time.time() - start_time
+    logger.info(f"Epoch [{epoch}] completed in {epoch_time:.2f}s, Average Loss: {epoch_loss:.4f}")
+    return epoch_loss
+
+def main(config_path: str):
+    config = load_config(config_path)
+    
+    set_seed(config['seed'])
+    device = torch.device(config['device'] if torch.cuda.is_available() else "cpu")
+    
+    logger = setup_logger("cross_spectral_train.log")
+    logger.info(f"Starting training on {device}")
+    
+    # 1. Dataset
+    train_loader = get_dataloader(
+        root_dir=config['dataset']['root_dir'],
+        split='train',
+        batch_size=config['train']['batch_size'],
+        img_size=config['dataset']['img_size'],
+        num_workers=config['dataset']['num_workers'],
+    )
+    
+    num_classes = len(train_loader.dataset.label_to_idx)
+    logger.info(f"Training on {num_classes} identities.")
+    
+    # 2. Model
+    model = build_model(
+        embedding_dim=512, 
+        pretrained=True, 
+        num_classes=num_classes
+    )
+    model = model.to(device)
+    
+    # 3. Loss & Optimizer
+    criterion = CrossSpectralLoss(
+        margin=config['train']['margin'],
+        lambda_softmax=config['train']['lambda_softmax'],
+        lambda_triplet=config['train']['lambda_triplet']
+    ).to(device)
+    
+    optimizer = optim.Adam(
+        model.parameters(), 
+        lr=config['train']['learning_rate'], 
+        weight_decay=config['train']['weight_decay']
+    )
+    
+    scheduler = StepLR(
+        optimizer, 
+        step_size=config['train']['step_size'], 
+        gamma=config['train']['gamma']
+    )
+    
+    save_dir = config['train']['save_dir']
+    os.makedirs(save_dir, exist_ok=True)
+    
+    best_loss = float('inf')
+    
+    # 4. Training Loop
+    epochs = config['train']['epochs']
+    for epoch in range(1, epochs + 1):
+        loss = train_epoch(model, train_loader, criterion, optimizer, device, epoch, logger)
+        scheduler.step()
+        
+        # Save Checkpoint
+        is_best = loss < best_loss
+        if is_best:
+            best_loss = loss
+            
+        save_checkpoint({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': loss,
+            'num_classes': num_classes
+        }, is_best, save_dir, filename=f"checkpoint_epoch_{epoch}.pth")
+
+    logger.info("Training complete.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train Cross Spectral Model")
+    parser.add_argument("--config", type=str, default="config.yaml", help="Path to config file")
+    args = parser.parse_args()
+    
+    main(args.config)

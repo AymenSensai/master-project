@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpectralFace | Cross-Spectral Identity Verification</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1 class="logo">SPECTRAL<span>FACE</span></h1>
+            <p class="subtitle">Advanced Cross-Spectral Face Recognition System</p>
+            
+            <div class="mode-toggle">
+                <button class="mode-btn active" id="mode-verify">VERIFICATION</button>
+                <button class="mode-btn" id="mode-recognize">RECOGNITION</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="comparison-grid">
+                <div class="upload-card" id="vis-card">
+                    <div class="card-header">
+                        <span class="badge badge-vis">VISIBLE (VIS)</span>
+                        <h3>Reference Gallery</h3>
+                    </div>
+                    <div class="upload-area" id="vis-upload">
+                        <input type="file" id="vis-input" accept="image/*" hidden>
+                        <div class="upload-placeholder">
+                            <div class="icon">📸</div>
+                            <p>Click or drag VIS image</p>
+                        </div>
+                        <img id="vis-preview" class="image-preview" src="" alt="VIS Preview" hidden>
+                    </div>
+                </div>
+
+                <div class="vs-divider">
+                    <div class="vs-line"></div>
+                    <div class="vs-circle">VS</div>
+                    <div class="vs-line"></div>
+                </div>
+
+                <div class="upload-card" id="nir-card">
+                    <div class="card-header">
+                        <span class="badge badge-nir">INFRARED (NIR)</span>
+                        <h3>Live Probe</h3>
+                    </div>
+                    <div class="upload-area" id="nir-upload">
+                        <input type="file" id="nir-input" accept="image/*" hidden>
+                        <div class="upload-placeholder">
+                            <div class="icon">🔍</div>
+                            <p>Click or drag NIR image</p>
+                        </div>
+                        <img id="nir-preview" class="image-preview" src="" alt="NIR Preview" hidden>
+                        <canvas id="face-canvas" class="image-preview" hidden></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-section">
+                <button id="verify-btn" class="btn-verify" disabled>
+                    <span class="btn-text">VERIFY IDENTITY</span>
+                    <span class="loader" hidden></span>
+                </button>
+            </div>
+
+            <div id="result-container" class="result-card" hidden>
+                <div class="result-header">
+                    <div id="status-icon" class="status-icon"></div>
+                    <h2 id="result-status">MATCH FOUND</h2>
+                </div>
+                <div class="result-body">
+                    <div class="metric">
+                        <span class="label">Similarity Score</span>
+                        <div class="progress-bar">
+                            <div id="similarity-fill" class="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <span id="similarity-value" class="value">0%</span>
+                    </div>
+                    <p id="result-message" class="message">The identities in VIS and NIR domains match with high confidence.</p>
+                </div>
+            </div>
+            <div class="gallery-peek">
+                <h4>KNOWN IDENTITIES IN GALLERY</h4>
+                <div id="identity-list" class="identity-grid">
+                    <span class="identity-badge">Loading...</span>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 SpectralFace Research. Powered by ResNet-18 & Metric Learning.</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
