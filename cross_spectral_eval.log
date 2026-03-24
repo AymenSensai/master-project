@@ -1,0 +1,14 @@
+2026-03-23 18:36:50,151 - INFO - Starting evaluation on cpu
+2026-03-23 18:36:50,444 - INFO - Loaded checkpoint from epoch 45
+2026-03-23 18:36:50,444 - INFO - Extracting embeddings for test set...
+2026-03-23 18:39:02,353 - INFO - Starting evaluation on cpu using train split
+2026-03-23 18:39:02,522 - INFO - Loaded checkpoint from epoch 45
+2026-03-23 18:39:02,522 - INFO - Extracting embeddings for test set...
+2026-03-23 18:39:31,317 - INFO - Found 200 VIS images and 184 NIR images.
+2026-03-23 18:39:31,317 - INFO - Computing Rank-1 Accuracy...
+2026-03-23 18:39:31,319 - INFO - Rank-1 Accuracy: 100.00%
+2026-03-23 18:39:31,319 - INFO - Computing Verification Metrics...
+2026-03-23 18:39:31,322 - INFO - TAR @ FAR=0.1: 100.00%
+2026-03-23 18:39:31,323 - INFO - TAR @ FAR=0.01: 100.00%
+2026-03-23 18:39:31,325 - INFO - TAR @ FAR=0.001: 100.00%
+2026-03-23 18:39:32,554 - INFO - Saved ROC curve to roc_curve_train.png

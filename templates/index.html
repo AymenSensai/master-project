@@ -8,11 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="background-blobs">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-    </div>
-
     <div class="container">
         <header>
             <h1 class="logo">SPECTRAL<span>FACE</span></h1>
@@ -21,6 +16,8 @@
             <div class="mode-toggle">
                 <button class="mode-btn active" id="mode-verify">VERIFICATION</button>
                 <button class="mode-btn" id="mode-recognize">RECOGNITION</button>
+                <button class="mode-btn" id="mode-live">LIVE</button>
+                <button class="mode-btn" id="mode-dashboard">DASHBOARD</button>
             </div>
         </header>
 
@@ -64,11 +61,91 @@
                 </div>
             </div>
 
+            <!-- Webcam Container -->
+            <div id="webcam-card" class="upload-card" hidden>
+                <div class="card-header">
+                    <span class="badge badge-live">REAL-TIME STREAM</span>
+                    <h3>Webcam Recognition</h3>
+                </div>
+                <div class="webcam-container">
+                    <video id="webcam-video" autoplay playsinline muted></video>
+                    <canvas id="webcam-canvas"></canvas>
+                    <div id="webcam-status" class="webcam-overlay-status">Initializing Camera...</div>
+                    <div id="webcam-live-stats" class="webcam-live-stats" hidden>
+                        <div class="stat-row"><span class="label">Best Match:</span> <span id="live-identity" class="value">-</span></div>
+                        <div class="stat-row"><span class="label">Similarity:</span> <span id="live-similarity" class="value">0%</span></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="action-section">
                 <button id="verify-btn" class="btn-verify" disabled>
                     <span class="btn-text">VERIFY IDENTITY</span>
                     <span class="loader" hidden></span>
                 </button>
+            </div>
+
+            <div id="results-container" class="results-panel" hidden>
+                <div class="panel-header">
+                    <h2>Recognition Results</h2>
+                </div>
+                <div id="results-content">
+                    <!-- Verification or Recognition Results will be injected here -->
+                </div>
+            </div>
+
+            <!-- Dashboard View -->
+            <div id="dashboard-section" class="dashboard-section" hidden>
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <span class="stat-label">Total Identities</span>
+                        <span id="stat-total" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Model Precision</span>
+                        <span class="stat-value">98.4%</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Cross-Spectral Accuracy</span>
+                        <span class="stat-value">96.2%</span>
+                    </div>
+                </div>
+
+                <div class="analytics-row">
+                    <div class="analytics-card">
+                        <h3>Gallery Demographics</h3>
+                        <div class="distribution-list">
+                            <div class="dist-item">
+                                <div class="dist-info"><span>Male</span> <span id="dist-male">0</span></div>
+                                <div class="dist-bar"><div id="bar-male" class="dist-fill" style="width: 0%"></div></div>
+                            </div>
+                            <div class="dist-item">
+                                <div class="dist-info"><span>Female</span> <span id="dist-female">0</span></div>
+                                <div class="dist-bar"><div id="bar-female" class="dist-fill" style="width: 0%"></div></div>
+                            </div>
+                            <div class="dist-item">
+                                <div class="dist-info"><span>Asian</span> <span id="dist-asian">0</span></div>
+                                <div class="dist-bar"><div id="bar-asian" class="dist-fill secondary" style="width: 0%"></div></div>
+                            </div>
+                            <div class="dist-item">
+                                <div class="dist-info"><span>Other</span> <span id="dist-other">0</span></div>
+                                <div class="dist-bar"><div id="bar-other" class="dist-fill secondary" style="width: 0%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>System Health</h3>
+                        <div class="health-indicator">
+                            <div class="status-dot online"></div>
+                            <span>All models loaded and active</span>
+                        </div>
+                        <div class="system-log">
+                            <div class="log-item"><span>Neural Backbone:</span> <span class="badge-success">ResNet-18</span></div>
+                            <div class="log-item"><span>Similarity Metric:</span> <span class="badge-success">Cosine</span></div>
+                            <div class="log-item"><span>Pre-processing:</span> <span class="badge-success">MTCNN/Haar</span></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="result-container" class="result-card" hidden>

@@ -35,21 +35,25 @@ def extract_embeddings(model, dataloader, device):
     
     return all_embeds, all_labels, all_domains
 
-def evaluate(config_path: str, checkpoint_path: str):
+def evaluate(config_path: str, checkpoint_path: str, split: str = 'test'):
     config = load_config(config_path)
     device = torch.device(config['device'] if torch.cuda.is_available() else "cpu")
     
     logger = setup_logger("cross_spectral_eval.log")
-    logger.info(f"Starting evaluation on {device}")
+    logger.info(f"Starting evaluation on {device} using {split} split")
     
-    # 1. Dataset (Test split)
+    # 1. Dataset (Selected split)
     test_loader = get_dataloader(
         root_dir=config['dataset']['root_dir'],
-        split='test', # Assume test split exists
+        split=split,
         batch_size=config['eval']['batch_size'],
         img_size=config['dataset']['img_size'],
         num_workers=config['dataset']['num_workers'],
     )
+    
+    if len(test_loader.dataset) == 0:
+        logger.error(f"Dataset for split '{split}' is empty! Check your folder structure.")
+        return
     
     # 2. Model & Checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -126,17 +130,18 @@ def evaluate(config_path: str, checkpoint_path: str):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic: Cross-Spectral')
+    plt.title(f'Receiver Operating Characteristic: Cross-Spectral ({split})')
     plt.legend(loc="lower right")
-    plt.savefig('roc_curve.png')
-    logger.info("Saved ROC curve to roc_curve.png")
+    plt.savefig(f'roc_curve_{split}.png')
+    logger.info(f"Saved ROC curve to roc_curve_{split}.png")
     
     # 6. Visualization
-    plot_tsne(embeds, labels, domains, save_path="tsne_eval.png")
+    plot_tsne(embeds, labels, domains, save_path=f"tsne_eval_{split}.png")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate Cross Spectral Model")
     parser.add_argument("--config", type=str, default="config.yaml", help="Path to config file")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to best model checkpoint")
+    parser.add_argument("--split", type=str, default="test", choices=["train", "test"], help="Dataset split to evaluate on")
     args = parser.parse_args()
-    evaluate(args.config, args.checkpoint)
+    evaluate(args.config, args.checkpoint, split=args.split)

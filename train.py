@@ -49,7 +49,7 @@ def train_epoch(model, dataloader, criterion, optimizer, device, epoch, logger):
     logger.info(f"Epoch [{epoch}] completed in {epoch_time:.2f}s, Average Loss: {epoch_loss:.4f}")
     return epoch_loss
 
-def main(config_path: str):
+def main(config_path: str, resume: bool = False):
     config = load_config(config_path)
     
     set_seed(config['seed'])
@@ -100,11 +100,30 @@ def main(config_path: str):
     save_dir = config['train']['save_dir']
     os.makedirs(save_dir, exist_ok=True)
     
+    start_epoch = 1
     best_loss = float('inf')
+
+    # Resume logic
+    checkpoint_path = os.path.join(save_dir, "model_best.pth")
+    if resume and os.path.exists(checkpoint_path):
+        logger.info(f"Resuming from checkpoint: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if 'scheduler_state_dict' in checkpoint:
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        else:
+            # Manually step scheduler to catch up if state wasn't saved
+            for _ in range(checkpoint['epoch']):
+                scheduler.step()
+        
+        start_epoch = checkpoint['epoch'] + 1
+        best_loss = checkpoint.get('loss', float('inf'))
+        logger.info(f"Resuming from epoch {start_epoch}")
     
     # 4. Training Loop
     epochs = config['train']['epochs']
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         loss = train_epoch(model, train_loader, criterion, optimizer, device, epoch, logger)
         scheduler.step()
         
@@ -117,6 +136,7 @@ def main(config_path: str):
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
             'loss': loss,
             'num_classes': num_classes
         }, is_best, save_dir, filename=f"checkpoint_epoch_{epoch}.pth")
@@ -126,6 +146,7 @@ def main(config_path: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train Cross Spectral Model")
     parser.add_argument("--config", type=str, default="config.yaml", help="Path to config file")
+    parser.add_argument("--resume", action="store_true", help="Resume from best checkpoint")
     args = parser.parse_args()
     
-    main(args.config)
+    main(args.config, resume=args.resume)
