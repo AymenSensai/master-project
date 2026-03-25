@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpectralFace | Cross-Spectral Identity Verification</title>
+    <title>SpectralFace | Vérification d'Identité Spectrale</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
@@ -11,13 +11,13 @@
     <div class="container">
         <header>
             <h1 class="logo">SPECTRAL<span>FACE</span></h1>
-            <p class="subtitle">Advanced Cross-Spectral Face Recognition System</p>
+            <p class="subtitle">Système Avancé de Reconnaissance Faciale Spectrale</p>
             
             <div class="mode-toggle">
-                <button class="mode-btn active" id="mode-verify">VERIFICATION</button>
-                <button class="mode-btn" id="mode-recognize">RECOGNITION</button>
-                <button class="mode-btn" id="mode-live">LIVE</button>
-                <button class="mode-btn" id="mode-dashboard">DASHBOARD</button>
+                <button class="mode-btn active" id="mode-verify">VÉRIFICATION</button>
+                <button class="mode-btn" id="mode-recognize">RECONNAISSANCE</button>
+                <button class="mode-btn" id="mode-live">EN DIRECT</button>
+                <button class="mode-btn" id="mode-dashboard">TABLEAU DE BORD</button>
             </div>
         </header>
 
@@ -26,15 +26,14 @@
                 <div class="upload-card" id="vis-card">
                     <div class="card-header">
                         <span class="badge badge-vis">VISIBLE (VIS)</span>
-                        <h3>Reference Gallery</h3>
                     </div>
                     <div class="upload-area" id="vis-upload">
                         <input type="file" id="vis-input" accept="image/*" hidden>
                         <div class="upload-placeholder">
                             <div class="icon">📸</div>
-                            <p>Click or drag VIS image</p>
+                            <p>Cliquez ou glissez l'image<br>VIS</p>
                         </div>
-                        <img id="vis-preview" class="image-preview" src="" alt="VIS Preview" hidden>
+                        <img id="vis-preview" class="image-preview" src="" alt="Aperçu VIS" hidden>
                     </div>
                 </div>
 
@@ -46,16 +45,15 @@
 
                 <div class="upload-card" id="nir-card">
                     <div class="card-header">
-                        <span class="badge badge-nir">INFRARED (NIR)</span>
-                        <h3>Live Probe</h3>
+                        <span class="badge badge-nir">INFRAROUGE (NIR)</span>
                     </div>
                     <div class="upload-area" id="nir-upload">
                         <input type="file" id="nir-input" accept="image/*" hidden>
                         <div class="upload-placeholder">
                             <div class="icon">🔍</div>
-                            <p>Click or drag NIR image</p>
+                            <p>Cliquez ou glissez l'image<br>NIR</p>
                         </div>
-                        <img id="nir-preview" class="image-preview" src="" alt="NIR Preview" hidden>
+                        <img id="nir-preview" class="image-preview" src="" alt="Aperçu NIR" hidden>
                         <canvas id="face-canvas" class="image-preview" hidden></canvas>
                     </div>
                 </div>
@@ -64,30 +62,30 @@
             <!-- Webcam Container -->
             <div id="webcam-card" class="upload-card" hidden>
                 <div class="card-header">
-                    <span class="badge badge-live">REAL-TIME STREAM</span>
-                    <h3>Webcam Recognition</h3>
+                    <span class="badge badge-live">FLUX EN TEMPS RÉEL</span>
+                    <h3>Reconnaissance par Webcam</h3>
                 </div>
                 <div class="webcam-container">
                     <video id="webcam-video" autoplay playsinline muted></video>
                     <canvas id="webcam-canvas"></canvas>
-                    <div id="webcam-status" class="webcam-overlay-status">Initializing Camera...</div>
+                    <div id="webcam-status" class="webcam-overlay-status">Initialisation de la caméra...</div>
                     <div id="webcam-live-stats" class="webcam-live-stats" hidden>
-                        <div class="stat-row"><span class="label">Best Match:</span> <span id="live-identity" class="value">-</span></div>
-                        <div class="stat-row"><span class="label">Similarity:</span> <span id="live-similarity" class="value">0%</span></div>
+                        <div class="stat-row"><span class="label">Meilleure Correspondance :</span> <span id="live-identity" class="value">-</span></div>
+                        <div class="stat-row"><span class="label">Similarité :</span> <span id="live-similarity" class="value">0%</span></div>
                     </div>
                 </div>
             </div>
 
             <div class="action-section">
                 <button id="verify-btn" class="btn-verify" disabled>
-                    <span class="btn-text">VERIFY IDENTITY</span>
+                    <span class="btn-text">VÉRIFIER L'IDENTITÉ</span>
                     <span class="loader" hidden></span>
                 </button>
             </div>
 
             <div id="results-container" class="results-panel" hidden>
                 <div class="panel-header">
-                    <h2>Recognition Results</h2>
+                    <h2>Résultats de Reconnaissance</h2>
                 </div>
                 <div id="results-content">
                     <!-- Verification or Recognition Results will be injected here -->
@@ -98,51 +96,51 @@
             <div id="dashboard-section" class="dashboard-section" hidden>
                 <div class="dashboard-grid">
                     <div class="stat-card">
-                        <span class="stat-label">Total Identities</span>
+                        <span class="stat-label">Identités Totales</span>
                         <span id="stat-total" class="stat-value">0</span>
                     </div>
                     <div class="stat-card">
-                        <span class="stat-label">Model Precision</span>
-                        <span class="stat-value">98.4%</span>
+                        <span class="stat-label">Précision du Modèle</span>
+                        <span id="stat-precision" class="stat-value">98.4%</span>
                     </div>
                     <div class="stat-card">
-                        <span class="stat-label">Cross-Spectral Accuracy</span>
-                        <span class="stat-value">96.2%</span>
+                        <span class="stat-label">Précision Spectrale</span>
+                        <span id="stat-accuracy" class="stat-value">96.2%</span>
                     </div>
                 </div>
 
                 <div class="analytics-row">
                     <div class="analytics-card">
-                        <h3>Gallery Demographics</h3>
+                        <h3>Démographie de la Galerie</h3>
                         <div class="distribution-list">
                             <div class="dist-item">
-                                <div class="dist-info"><span>Male</span> <span id="dist-male">0</span></div>
+                                <div class="dist-info"><span>Homme</span> <span id="dist-male">0</span></div>
                                 <div class="dist-bar"><div id="bar-male" class="dist-fill" style="width: 0%"></div></div>
                             </div>
                             <div class="dist-item">
-                                <div class="dist-info"><span>Female</span> <span id="dist-female">0</span></div>
+                                <div class="dist-info"><span>Femme</span> <span id="dist-female">0</span></div>
                                 <div class="dist-bar"><div id="bar-female" class="dist-fill" style="width: 0%"></div></div>
                             </div>
                             <div class="dist-item">
-                                <div class="dist-info"><span>Asian</span> <span id="dist-asian">0</span></div>
+                                <div class="dist-info"><span>Asiatique</span> <span id="dist-asian">0</span></div>
                                 <div class="dist-bar"><div id="bar-asian" class="dist-fill secondary" style="width: 0%"></div></div>
                             </div>
                             <div class="dist-item">
-                                <div class="dist-info"><span>Other</span> <span id="dist-other">0</span></div>
+                                <div class="dist-info"><span>Autre</span> <span id="dist-other">0</span></div>
                                 <div class="dist-bar"><div id="bar-other" class="dist-fill secondary" style="width: 0%"></div></div>
                             </div>
                         </div>
                     </div>
                     <div class="analytics-card">
-                        <h3>System Health</h3>
+                        <h3>Santé du Système</h3>
                         <div class="health-indicator">
                             <div class="status-dot online"></div>
-                            <span>All models loaded and active</span>
+                            <span>Tous les modèles sont chargés et actifs</span>
                         </div>
                         <div class="system-log">
-                            <div class="log-item"><span>Neural Backbone:</span> <span class="badge-success">ResNet-18</span></div>
-                            <div class="log-item"><span>Similarity Metric:</span> <span class="badge-success">Cosine</span></div>
-                            <div class="log-item"><span>Pre-processing:</span> <span class="badge-success">MTCNN/Haar</span></div>
+                            <div class="log-item"><span>Réseau de Neurones :</span> <span class="badge-success">ResNet-18</span></div>
+                            <div class="log-item"><span>Métrique de Similarité :</span> <span class="badge-success">Cosine</span></div>
+                            <div class="log-item"><span>Pré-traitement :</span> <span class="badge-success">MTCNN/Haar</span></div>
                         </div>
                     </div>
                 </div>
@@ -151,30 +149,20 @@
             <div id="result-container" class="result-card" hidden>
                 <div class="result-header">
                     <div id="status-icon" class="status-icon"></div>
-                    <h2 id="result-status">MATCH FOUND</h2>
+                    <h2 id="result-status">CORRESPONDANCE TROUVÉE</h2>
                 </div>
                 <div class="result-body">
                     <div class="metric">
-                        <span class="label">Similarity Score</span>
+                        <span class="label">Score de Similarité</span>
                         <div class="progress-bar">
                             <div id="similarity-fill" class="progress-fill" style="width: 0%"></div>
                         </div>
                         <span id="similarity-value" class="value">0%</span>
                     </div>
-                    <p id="result-message" class="message">The identities in VIS and NIR domains match with high confidence.</p>
-                </div>
-            </div>
-            <div class="gallery-peek">
-                <h4>KNOWN IDENTITIES IN GALLERY</h4>
-                <div id="identity-list" class="identity-grid">
-                    <span class="identity-badge">Loading...</span>
+                    <p id="result-message" class="message">Les identités dans les domaines VIS et NIR correspondent avec une grande confiance.</p>
                 </div>
             </div>
         </main>
-
-        <footer>
-            <p>&copy; 2026 SpectralFace Research. Powered by ResNet-18 & Metric Learning.</p>
-        </footer>
     </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>

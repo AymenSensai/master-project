@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const modeDashboard = document.getElementById('mode-dashboard');
     const dashboardSection = document.getElementById('dashboard-section');
     const statTotal = document.getElementById('stat-total');
+    const statPrecision = document.getElementById('stat-precision');
+    const statAccuracy = document.getElementById('stat-accuracy');
     const distMale = document.getElementById('dist-male');
     const distFemale = document.getElementById('dist-female');
     const distAsian = document.getElementById('dist-asian');
@@ -26,8 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const barFemale = document.getElementById('bar-female');
     const barAsian = document.getElementById('bar-asian');
     const barOther = document.getElementById('bar-other');
-
-    const mainGrid = document.querySelector('.main-grid');
 
     const modeVerify = document.getElementById('mode-verify');
     const modeRecognize = document.getElementById('mode-recognize');
@@ -66,13 +66,30 @@ document.addEventListener('DOMContentLoaded', () => {
         modeDashboard.classList.toggle('active', mode === 'dashboard');
         
         // Update Action Button Text
-        btnText.textContent = (mode === 'live' || mode === 'dashboard') ? '' : (mode === 'verify' ? 'VERIFY IDENTITY' : 'RECOGNIZE FACE');
+        btnText.textContent = (mode === 'live' || mode === 'dashboard') ? '' : (mode === 'verify' ? 'VÉRIFIER L\'IDENTITÉ' : 'RECONNAÎTRE LE VISAGE');
         
         // Reset results and check readiness
         resultContainer.hidden = true;
         webcamCard.hidden = mode !== 'live';
         dashboardSection.hidden = mode !== 'dashboard';
-        mainGrid.style.display = mode === 'dashboard' ? 'none' : 'grid';
+        
+        const comparisonGrid = document.querySelector('.comparison-grid');
+        const actionSection = document.querySelector('.action-section');
+        const galleryPeek = document.querySelector('.gallery-peek');
+        const resultsContainer = document.getElementById('results-container');
+        
+        if (comparisonGrid) {
+            comparisonGrid.style.display = (mode === 'dashboard' || mode === 'live') ? 'none' : '';
+        }
+        if (actionSection) {
+            actionSection.style.display = (mode === 'dashboard' || mode === 'live') ? 'none' : '';
+        }
+        if (galleryPeek) {
+            galleryPeek.style.display = mode === 'dashboard' ? 'none' : '';
+        }
+        if (resultsContainer && mode === 'dashboard') {
+            resultsContainer.hidden = true;
+        }
         
         if (mode === 'dashboard') {
             loadAnalytics();
@@ -99,6 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update stats with animation
             animateValue(statTotal, 0, data.total_identities, 1000);
+            
+            if (statPrecision && data.model_precision) statPrecision.textContent = data.model_precision;
+            if (statAccuracy && data.cross_spectral_accuracy) statAccuracy.textContent = data.cross_spectral_accuracy;
             
             // Update demographics
             const total = data.total_identities;
@@ -143,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 video: { width: 1280, height: 720, facingMode: 'user' } 
             });
             webcamVideo.srcObject = webcamStream;
-            webcamStatus.textContent = 'Camera Active - Starting Loop...';
+            webcamStatus.textContent = 'Caméra active - Démarrage de la boucle...';
             
             // Wait for video metadata
             webcamVideo.onloadedmetadata = () => {
@@ -154,8 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (err) {
             console.error('Webcam Error:', err);
-            webcamStatus.textContent = 'Error: Camera Access Denied';
-            alert('Could not access webcam. Please ensure you have granted permissions.');
+            webcamStatus.textContent = 'Erreur: Accès refusé à la caméra';
+            alert('Impossible d\'accéder à la webcam. Veuillez vérifier vos autorisations.');
         }
     }
 
@@ -170,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const ctx = webcamCanvas.getContext('2d');
         ctx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
-        webcamStatus.textContent = 'Camera Off';
+        webcamStatus.textContent = 'Caméra éteinte';
     }
 
     const webcamLiveStats = document.getElementById('webcam-live-stats');
@@ -181,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!webcamStream || currentMode !== 'live' || webcamVideo.videoWidth === 0) return;
 
         frameCount++;
-        webcamStatus.textContent = `Scanning... [Frame ${frameCount}]`;
+        webcamStatus.textContent = `Analyse... [Image ${frameCount}]`;
         webcamLiveStats.hidden = false;
 
         // Capture current frame
@@ -206,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (data.error) {
-                webcamStatus.textContent = `API Error: ${data.error}`;
+                webcamStatus.textContent = `Erreur API: ${data.error}`;
                 return;
             }
 
@@ -214,15 +234,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data.face_box) {
                 drawLiveOverlay(data);
-                webcamStatus.textContent = data.matched ? `Match: ${data.identity}` : 'Face Detected - Searching...';
+                webcamStatus.textContent = data.matched ? `Correspondance: ${data.identity}` : 'Visage détecté - Recherche...';
             } else {
                 const ctx = webcamCanvas.getContext('2d');
                 ctx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
-                webcamStatus.textContent = 'No Face Detected';
+                webcamStatus.textContent = 'Aucun visage détecté';
             }
         } catch (error) {
             console.error('Live Recognition Error:', error);
-            webcamStatus.textContent = 'Connection Error';
+            webcamStatus.textContent = 'Erreur de connexion';
         }
     }
 
@@ -274,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.strokeRect(x, y, w, h);
 
         // Label Background
-        const label = isMatch ? `${data.identity} (${(data.similarity * 100).toFixed(0)}%)` : 'DETECTING...';
+        const label = isMatch ? `${data.identity} (${(data.similarity * 100).toFixed(0)}%)` : 'DÉTECTION...';
         ctx.font = '700 14px Inter';
         const textMetrics = ctx.measureText(label);
         const textWidth = textMetrics.width;
@@ -301,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             identityList.innerHTML = '';
             if (data.identities.length === 0) {
-                identityList.innerHTML = '<span class="identity-badge">Gallery is empty</span>';
+                identityList.innerHTML = '<span class="identity-badge">La galerie est vide</span>';
             } else {
                 data.identities.forEach(id => {
                     const badge = document.createElement('span');
@@ -368,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function performVerification() {
         if (!visFile || !nirFile) return;
 
-        setLoading(true, 'ANALYZING...');
+        setLoading(true, 'ANALYSE EN COURS...');
         resultContainer.hidden = true;
 
         const formData = new FormData();
@@ -381,20 +401,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: formData
             });
             const data = await response.json();
-            if (data.error) alert('Error: ' + data.error);
+            if (data.error) alert('Erreur : ' + data.error);
             else displayResult(data);
         } catch (error) {
             console.error('Fetch error:', error);
-            alert('An error occurred during verification.');
+            alert('Une erreur s\'est produite lors de la vérification.');
         } finally {
-            setLoading(false, 'VERIFY IDENTITY');
+            setLoading(false, 'VÉRIFIER L\'IDENTITÉ');
         }
     }
 
     async function performRecognition() {
         if (!nirFile) return;
 
-        setLoading(true, 'RECOGNIZING...');
+        setLoading(true, 'RECONNAISSANCE EN COURS...');
         resultContainer.hidden = true;
 
         const formData = new FormData();
@@ -408,9 +428,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (data.error) {
-                alert('Error: ' + data.error);
+                alert('Erreur: ' + data.error);
             } else if (data.message === 'Gallery is empty') {
-                alert('Gallery is empty. Please add images to the gallery/ folder.');
+                alert('La galerie est vide. Veuillez ajouter des images dans le dossier gallery/.');
             } else {
                 displayRecognitionResult(data);
                 if (data.face_box) {
@@ -419,9 +439,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Fetch error:', error);
-            alert('An error occurred during recognition.');
+            alert('Une erreur s\'est produite lors de la reconnaissance.');
         } finally {
-            setLoading(false, 'RECOGNIZE FACE');
+            setLoading(false, 'RECONNAÎTRE LE VISAGE');
         }
     }
 
@@ -470,16 +490,16 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (data.match) {
             resultContainer.classList.add('match');
-            resultStatus.textContent = 'IDENTITY MATCHED';
-            resultMessage.textContent = `High confidence cross-spectral match. The NIR probe matches the VIS reference identity.`;
+            resultStatus.textContent = 'IDENTITÉ CORRESPONDANTE';
+            resultMessage.textContent = `Correspondance Spectrale de haute confiance. La sonde NIR correspond à l'identité de référence VIS.`;
             
             if (data.heatmap) {
                 addXAIButton(data.heatmap);
             }
         } else {
             resultContainer.classList.add('mismatch');
-            resultStatus.textContent = 'IDENTITY MISMATCH';
-            resultMessage.textContent = `Low similarity detected. These appear to be different identities.`;
+            resultStatus.textContent = 'IDENTITÉ NON CORRESPONDANTE';
+            resultMessage.textContent = `Faible similarité détectée. Il semble s'agir de personnes différentes.`;
             removeXAIButton();
         }
 
@@ -495,16 +515,16 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (data.matched) {
             resultContainer.classList.add('match');
-            resultStatus.textContent = `RECOGNIZED: ${data.identity}`;
-            resultMessage.textContent = `Highest similarity match found in the gallery for ${data.identity} with ${simPercent}% confidence.`;
+            resultStatus.textContent = `RECONNU : ${data.identity}`;
+            resultMessage.textContent = `La meilleure correspondance trouvée dans la galerie pour ${data.identity} avec ${simPercent}% de confiance.`;
             
             if (data.heatmap) {
                 addXAIButton(data.heatmap);
             }
         } else {
             resultContainer.classList.add('mismatch');
-            resultStatus.textContent = 'UNKNOWN IDENTITY';
-            resultMessage.textContent = `No reliable match found in the gallery. Best match was ${data.identity} but with low confidence (${simPercent}%).`;
+            resultStatus.textContent = 'IDENTITÉ INCONNUE';
+            resultMessage.textContent = `Aucune correspondance fiable trouvée dans la galerie. La meilleure était ${data.identity} avec une faible confiance (${simPercent}%).`;
             removeXAIButton();
         }
 
@@ -516,7 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const btn = document.createElement('button');
         btn.id = 'btn-show-xai';
         btn.className = 'btn-insight';
-        btn.innerHTML = '🔍 WHY DID IT MATCH? (AI INSIGHTS)';
+        btn.innerHTML = '🔍 POURQUOI CELA A-T-IL CORRESPOND ? (APERÇUS IA)';
         btn.addEventListener('click', () => {
             xaiOriginal.src = nirPreview.src;
             xaiHeatmap.src = `data:image/jpeg;base64,${heatmapB64}`;
