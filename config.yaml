@@ -4,7 +4,7 @@ device: "cuda"
 
 # Dataset Configurations
 dataset:
-  root_dir: "./data/CASIA-NIR-VIS-2.0"
+  root_dir: "./data/TuftsFaceDatabase"
   img_size: 112
   num_workers: 4
 

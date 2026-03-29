@@ -4,3 +4,7 @@ pyyaml
 numpy
 matplotlib
 scikit-learn
+flask
+flask-cors
+opencv-python
+Pillow

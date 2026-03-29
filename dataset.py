@@ -5,27 +5,24 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from typing import Tuple, List, Dict
 
-class CasiaNirVisDataset(Dataset):
+class TuftsFaceDataset(Dataset):
     """
-    Custom Dataset for CASIA NIR-VIS 2.0.
+    Custom Dataset for Tufts Face Database.
     Expects folder structure:
     root_dir/
-        train/
-            0001/
-                VIS/
-                    img1.jpg
-                    ...
-                NIR/
-                    img1.bmp
-                    ...
-            0002/
-               ...
-        test/
+        TD_RGB/ (or VIS/)
+            001/
+                TD_RGB_A_1_0.jpg
+            002/
+                ...
+        TD_IR/ (or NIR/)
+            001/
+                TD_IR_A_1_0.jpg
             ...
     """
     def __init__(self, root_dir: str, split: str = 'train', img_size: int = 112):
         super().__init__()
-        self.root_dir = os.path.join(root_dir, split)
+        self.root_dir = root_dir
         self.split = split
         self.img_size = img_size
         
@@ -60,35 +57,61 @@ class CasiaNirVisDataset(Dataset):
 
     def _load_data(self):
         """
-        Loads image paths, identity labels, and domain (VIS/NIR) from directory structure.
+        Loads image paths, identity labels, and domain (VIS/NIR) from Tufts structure.
         """
         if not os.path.exists(self.root_dir):
-            # For demonstration if dir doesn't exist, we will create dummy data later,
-            # but ideally we log a warning here.
-            print(f"Warning: Directory {self.root_dir} does not exist. Awaiting data.")
+            print(f"Warning: Directory {self.root_dir} does not exist.")
             return
 
-        identities = sorted(os.listdir(self.root_dir))
-        for idx, identity in enumerate(identities):
-            id_path = os.path.join(self.root_dir, identity)
-            if not os.path.isdir(id_path):
-                continue
-                
+        # Modality folder names (common variations for Tufts)
+        vis_mod_names = ['TD_RGB', 'TD_VIS', 'VIS', 'RGB']
+        nir_mod_names = ['TD_IR', 'TD_NIR', 'NIR', 'IR']
+
+        vis_root = None
+        nir_root = None
+        
+        for name in vis_mod_names:
+            path = os.path.join(self.root_dir, name)
+            if os.path.exists(path):
+                vis_root = path
+                break
+        
+        for name in nir_mod_names:
+            path = os.path.join(self.root_dir, name)
+            if os.path.exists(path):
+                nir_root = path
+                break
+
+        if not vis_root or not nir_root:
+            print(f"Error: Could not find VIS ({vis_mod_names}) or NIR ({nir_mod_names}) folders in {self.root_dir}")
+            return
+
+        # Identify subjects (common to both modalities)
+        vis_identities = set(d for d in os.listdir(vis_root) if os.path.isdir(os.path.join(vis_root, d)))
+        nir_identities = set(d for d in os.listdir(nir_root) if os.path.isdir(os.path.join(nir_root, d)))
+        
+        common_identities = sorted(list(vis_identities.intersection(nir_identities)))
+        
+        # Simple train/test split if requested (Tufts doesn't come pre-split)
+        if self.split == 'train':
+            identities_to_use = common_identities[:int(0.8 * len(common_identities))]
+        else:
+            identities_to_use = common_identities[int(0.8 * len(common_identities)):]
+
+        for idx, identity in enumerate(identities_to_use):
             self.label_to_idx[identity] = idx
             
-            # Load VIS
-            vis_dir = os.path.join(id_path, 'VIS')
-            if os.path.exists(vis_dir):
-                for img_name in os.listdir(vis_dir):
-                    if img_name.endswith(('.jpg', '.png', '.bmp')):
-                        self.samples.append((os.path.join(vis_dir, img_name), idx, 0))
-                        
-            # Load NIR
-            nir_dir = os.path.join(id_path, 'NIR')
-            if os.path.exists(nir_dir):
-                for img_name in os.listdir(nir_dir):
-                    if img_name.endswith(('.jpg', '.png', '.bmp')):
-                        self.samples.append((os.path.join(nir_dir, img_name), idx, 1))
+            # Load VIS (RGB)
+            id_vis_path = os.path.join(vis_root, identity)
+            for img_name in os.listdir(id_vis_path):
+                if img_name.lower().endswith(('.jpg', '.png', '.bmp')):
+                    self.samples.append((os.path.join(id_vis_path, img_name), idx, 0)) # VIS=0
+            
+            # Load NIR (IR)
+            id_nir_path = os.path.join(nir_root, identity)
+            for img_name in os.listdir(id_nir_path):
+                if img_name.lower().endswith(('.jpg', '.png', '.bmp')):
+                    self.samples.append((os.path.join(id_nir_path, img_name), idx, 1)) # NIR=1
                         
         print(f"Loaded {len(self.samples)} images from {len(self.label_to_idx)} identities for {self.split} split.")
 
@@ -108,6 +131,6 @@ class CasiaNirVisDataset(Dataset):
         return image, label, domain
 
 def get_dataloader(root_dir: str, split: str, batch_size: int, img_size: int, num_workers: int):
-    dataset = CasiaNirVisDataset(root_dir=root_dir, split=split, img_size=img_size)
+    dataset = TuftsFaceDataset(root_dir=root_dir, split=split, img_size=img_size)
     shuffle = (split == 'train')
     return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last=shuffle)

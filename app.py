@@ -35,18 +35,26 @@ if face_cascade.empty():
 
 # Load Model
 def load_checkpoint(path, device):
+    print(f"System: Initializing computation on {device}")
     if not os.path.exists(path):
-        print(f"Warning: Checkpoint not found at {path}. Using untrained model for demo.")
-        return build_model(embedding_dim=512, pretrained=True).to(device)
+        print(f"Warning: Checkpoint not found at {path}. Using untrained ResNet-18 for Demo Mode.")
+        model = build_model(embedding_dim=512, pretrained=True)
+        model.to(device)
+        model.eval()
+        return model
     
-    checkpoint = torch.load(path, map_location=device)
-    num_classes = checkpoint.get('num_classes', 0)
-    model = build_model(embedding_dim=512, pretrained=False, num_classes=num_classes)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model.to(device)
-    model.eval()
-    print(f"Loaded checkpoint from {path}")
-    return model
+    try:
+        checkpoint = torch.load(path, map_location=device)
+        num_classes = checkpoint.get('num_classes', 0)
+        model = build_model(embedding_dim=512, pretrained=False, num_classes=num_classes)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model.to(device)
+        model.eval()
+        print(f"Status: Success! Loaded trained checkpoint from {path}")
+        return model
+    except Exception as e:
+        print(f"Error: Failed to load checkpoint: {e}. Falling back to untrained model.")
+        return build_model(embedding_dim=512, pretrained=True).to(device)
 
 model = load_checkpoint(CHECKPOINT_PATH, DEVICE)
 
@@ -77,9 +85,12 @@ def compare():
     vis_file = request.files['vis_image']
     nir_file = request.files['nir_image']
     
+    vis_data = vis_file.read()
+    nir_data = nir_file.read()
+    
     try:
-        vis_tensor = preprocess_image(vis_file.read())
-        nir_tensor = preprocess_image(nir_file.read())
+        vis_tensor = preprocess_image(vis_data)
+        nir_tensor = preprocess_image(nir_data)
         
         with torch.no_grad():
             vis_embed = model(vis_tensor)
@@ -95,7 +106,7 @@ def compare():
         if match:
             # We use layer4 as target
             target_layer = model.features[7]
-            nparr = np.frombuffer(nir_file.read(), np.uint8)
+            nparr = np.frombuffer(nir_data, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if img is not None:
                 heatmap_b64 = get_base64_heatmap(img, model, target_layer, transform, DEVICE)

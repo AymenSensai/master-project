@@ -92,6 +92,33 @@
                 </div>
             </div>
 
+            <!-- XAI Insights Panel (Missing in original index.html) -->
+            <div id="insights-panel" class="insights-panel" hidden>
+                <div class="panel-header">
+                    <div class="header-main">
+                        <h4>Aperçus du Réseau de Neurones</h4>
+                        <p>Carte d'activation thermique montrant les caractéristiques clés utilisées pour la correspondance.</p>
+                    </div>
+                    <button id="close-insights" class="btn-close">&times;</button>
+                </div>
+                <div class="insights-body">
+                    <div class="heatmap-comparison">
+                        <div class="img-box">
+                            <span class="label">Sonde Originale (NIR)</span>
+                            <img id="xai-original" src="" alt="Sonde NIR">
+                        </div>
+                        <div class="img-box">
+                            <span class="label">Carte d'Activation</span>
+                            <img id="xai-heatmap" src="" alt="Carte Thermique">
+                        </div>
+                    </div>
+                    <div class="insights-explanation">
+                        <h5>Analyse Spectrale</h5>
+                        <p>Les zones en <span class="high-activation">rouge</span> indiquent les repères faciaux que le modèle a trouvés les plus discriminants pour cette identification (yeux, nez, contour des lèvres).</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Dashboard View -->
             <div id="dashboard-section" class="dashboard-section" hidden>
                 <div class="dashboard-grid">

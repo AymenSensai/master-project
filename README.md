@@ -1,93 +1,109 @@
-# Cross-Spectral Face Recognition System
+# SpectralFace: Cross-Spectral Face Recognition System
 
-A deep learning research framework for learning domain-invariant embeddings to perform High-Accuracy Face Recognition across Visible (VIS) and Near-Infrared (NIR) spectra.
+SpectralFace is an advanced biometric system designed to perform face recognition across different spectral domains—specifically between **Visible (VIS)** and **Near-Infrared (NIR)** light. This technology is critical for surveillance, nighttime security, and robust identity verification where lighting conditions vary.
 
-## Overview
+![UI Preview](https://img.shields.io/badge/Status-Beta-blue)
 
-This repository implements a **Two-Stream ResNet-18 Architecture** utilizing metric learning (Triplet Margin Loss) and Identity Classification (Softmax Margin).
+## 🚀 Key Features
 
-The network removes standard classification heads and computes 512-dimensional embeddings which are L2 normalized to fall on a unit hypersphere. Verification is then securely completed by calculating Cosine Similarity across these normalized vectors.
+- **Cross-Spectral Comparison**: Match a Near-Infrared (NIR) probe image against a Visible (VIS) reference.
+- **Identity Recognition**: Search a live or uploaded NIR probe against a pre-enrolled VIS gallery.
+- **Explainable AI (XAI)**: Visualizes the neural network's focus areas using activation heatmaps.
+- **Real-time Processing**: Live face detection and recognition via webcam.
+- **Analytics Dashboard**: Comprehensive system stats and demographic distributions.
 
-Dataset Target: **CASIA NIR-VIS 2.0**
+## 🛠️ Technology Stack
 
-## Project Structure
+- **Backend**: Python 3.x, Flask, PyTorch
+- **Computer Vision**: OpenCV (Haar Cascades), PIL
+- **Machine Learning**: ResNet-18 backbone with Triplet and Softmax losses.
+- **Frontend**: HTML5, Vanilla CSS3 (Modern Glassmorphism Design), JavaScript (ES6).
 
-```text
-.
-├── config.yaml             # Hyperparameters, paths and training configuration
-├── dataset.py              # Custom dataloading and augmentation logic for CASIA
-├── model.py                # Two-stream ResNet-18 architecture with Shared weights
-├── losses.py               # Combined Triplet Loss with online Hard Negative Mining
-├── utils.py                # Helpers (Logging, Checkpoint saving, Metric calculation, t-SNE)
-├── train.py                # Core PyTorch training loop
-├── evaluate.py             # Inference loop, evaluating Rank-1, ROC, and saving plots
-└── main.py                 # CLI wrapper script
-```
+## 📥 Setup Instructions
 
-## Setup Instructions
-
-### Environment
-
-Ensure Python 3.8+ and PyTorch matching your hardware specification are installed.
-Basic pip dependencies required:
-
+### 1. Clone the Repository
 ```bash
-pip install torch torchvision pyyaml numpy matplotlib scikit-learn
+git clone https://github.com/your-username/master-project.git
+cd master-project
 ```
 
-### Data Preparation
-
-You must format your CASIA dataset to follow standard Identity categorization in `train` and `test` splits:
-
-```text
-data/CASIA-NIR-VIS-2.0/
-    train/
-        0001/
-            VIS/
-                img1.jpg
-            NIR/
-                img1.bmp
-        0002/ ...
-    test/ ...
-```
-
-Adjust the `root_dir` in `config.yaml` to point to the `CASIA-NIR-VIS-2.0` directory.
-
-## Execution
-
-### 1. Training
-
-To begin training the embedding model using settings defined in `config.yaml`:
-
+### 2. Prepare the Environment
+Initialize the required directory structure:
 ```bash
-python main.py train --config config.yaml
+python3 setup_project.py
 ```
 
-**Testing functionality without the dataset**:
-To simply test memory usage and code syntax without needing data physically present, an internal dummy generator runs using Random Image Noise by adding `--dummy`:
-
+### 3. Create a Virtual Environment (Recommended)
+To avoid "externally managed environment" errors on macOS/Linux, it is highly recommended to use a virtual environment:
 ```bash
-python main.py train --dummy
+# Create the virtual environment
+python3 -m venv venv
+
+# Activate it
+source venv/bin/activate
 ```
 
-Model checkpoints will periodically save to the `save_dir` specified in `config.yaml`.
-
-### 2. Evaluation
-
-To run inference mapping NIR probes against VIS galleries using the saved weights and dynamically computing Rank-1 Accuracy, ROC and True Acceptance Rates at multiple False Acceptance Rates (TAR@FAR):
-
+### 4. Install Dependencies
+Once the virtual environment is active, install the required libraries:
 ```bash
-python main.py eval --checkpoint ./checkpoints/model_best.pth
+pip install -r requirements.txt
 ```
 
-Like training, evaluation logic can be simulated with random noise metrics:
+## 🏃 Running the Application
 
+### Start the Web Server
+Launch the Flask application:
 ```bash
-python main.py eval --checkpoint ./checkpoints/model_best.pth --dummy
+python3 app.py
+```
+Open your browser and navigate to: **`http://127.0.0.1:5001`**
+
+### Training & Evaluation (Optional)
+If you have the Tufts Face Database dataset, you can train the model using:
+```bash
+python3 main.py train --config config.yaml
+```
+To evaluate a trained checkpoint:
+```bash
+python3 main.py eval --config config.yaml --checkpoint checkpoints/model_best.pth
 ```
 
-Evaluation automatically generates visual outputs including a quantitative `.png` diagram of the `ROC` plot, and a 2-Dimensional Plot mapping the high-dimensional domain separation using `t-SNE`.
+## 🧠 System Architecture & Logic
 
-## Academic Context
+### 1. Model Architecture
+The system utilizes a **ResNet-18** deep learning backbone. It transforms raw face images into a **512-dimensional embedding** (a mathematical representation of identity).
 
-Suitable for a Master-level thesis detailing domain adaptation matching algorithms. The core concept implemented is Domain Invariance: projecting cross-spectral samples into a shared sub-space via an optimized pairwise margin approach.
+### 2. Training Strategy (VIS-NIR Alignment)
+To bridge the "spectral gap" (differences between visible and infrared light), we use a **Dual-Loss approach**:
+*   **Softmax Loss (Identity Classification)**: Forces the model to learn features that distinguish between different individuals.
+*   **Triplet Loss (Spectral Invariance)**: Given an NIR "Anchor," it pulls a VIS "Positive" (same person) closer while pushing a "Negative" (different person) further away in the embedding space. This teaches the model to ignore light spectra and focus solely on identity.
+
+### 3. Evaluation Protocol
+The system uses a **Gallery-Probe** retrieval model:
+*   **Gallery**: A database of VIS (Visible) images for all known identities.
+*   **Probe**: An "unknown" NIR image captured from a sensor.
+*   **Metric**: We calculate **Cosine Similarity** between the probe and every gallery entry. The system reports **Rank-1 Accuracy** (is the top match correct?) and **VR@FAR** (Verification Rate at a specific False Acceptance Rate).
+
+### 4. Explainable AI (XAI)
+The application implements **Grad-CAM** (Gradient-weighted Class Activation Mapping). It visualizes the pixels (eyes, nose, jawline) that most influenced the model's decision, providing transparency into the recognition process.
+
+## 📂 Project Structure
+
+- `app.py`: Main Flask application entry point.
+- `model.py`: Architecture definition (features and classification layers).
+- `gallery_manager.py`: Logic for managing the identity gallery and similarity search.
+- `dataset.py`: Custom PyTorch dataset loader for CASIA NIR-VIS.
+- `xai_utils.py`: Utility for generating Explainable AI heatmaps.
+- `gallery/`: Identity storage folder (structure: `gallery/Identity_Name/*.jpg`).
+- `static/` & `templates/`: Frontend assets and HTML.
+
+## 🔍 How it Works
+
+1. **Preprocessing**: Images are resized to 112x112 and normalized.
+2. **Feature Extraction**: A ResNet-18 backbone extracts a 512-dimensional embedding.
+3. **Domain Alignment**: The network is trained using a combination of Cross-Entropy and Triplet Loss to bridge the gap between VIS and NIR sensors.
+4. **Matching**: Similarity is measured using Cosine Distance.
+5. **Visualization**: Grad-CAM heatmaps highlight pixels contributing most to the identity decision.
+
+---
+*Created as part of a Master Project on Advanced Biometric Systems.*
