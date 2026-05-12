@@ -18,8 +18,8 @@ from utils import load_config, detect_and_crop_face
 
 import logging
 
-# Configure logging to file
-logging.basicConfig(filename='app_debug.log', level=logging.INFO, 
+# Configure logging to console
+logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
@@ -84,10 +84,6 @@ gallery = GalleryManager(model, preprocess_image, DEVICE, gallery_dir=VIS_GALLER
 @app.route('/')
 def index():
     return render_template('index.html')
-
-@app.route('/logo.png')
-def get_logo():
-    return send_from_directory('/Users/mac/.gemini/antigravity/brain/3015868c-c70f-43e2-900e-a4f9f8de695c', 'spectralface_icon_logo_1778523183111.png')
 
 @app.route('/data/<path:filename>')
 def serve_data(filename):
