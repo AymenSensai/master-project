@@ -1,22 +1,27 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SpectralFace | Vérification d'Identité Spectrale</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@400;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
         <header>
             <h1 class="logo">SPECTRAL<span>FACE</span></h1>
             <p class="subtitle">Système Avancé de Reconnaissance Faciale Spectrale</p>
-            
+
             <div class="mode-toggle">
                 <button class="mode-btn active" id="mode-verify">VÉRIFICATION</button>
                 <button class="mode-btn" id="mode-recognize">RECONNAISSANCE</button>
                 <button class="mode-btn" id="mode-live">LIVE HUD</button>
+                <button class="mode-btn" id="mode-challenge">DÉFI IA</button>
                 <button class="mode-btn" id="mode-gallery">GALERIE</button>
                 <button class="mode-btn" id="mode-dashboard">TABLEAU DE BORD</button>
             </div>
@@ -61,7 +66,8 @@
                     </div>
                 </div>
 
-<div class="action-section">
+
+                <div class="action-section">
                     <button id="verify-btn" class="btn-verify" disabled>
                         <span class="btn-text">VÉRIFIER L'IDENTITÉ</span>
                         <span class="loader" hidden></span>
@@ -85,7 +91,8 @@
                         <div id="xai-section" hidden>
                             <div class="xai-header">
                                 <h4>Carte d'Attribution (Integrated Gradients)</h4>
-                                <p>Les zones chaudes indiquent les pixels ayant le plus contribué à la correspondance.</p>
+                                <p>Les zones chaudes indiquent les pixels ayant le plus contribué à la correspondance.
+                                </p>
                             </div>
                             <div class="heatmap-comparison">
                                 <div class="img-box">
@@ -131,9 +138,11 @@
                         </div>
                     </div>
                 </div>
-                <div class="webcam-controls" style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 1rem;">
+                <div class="webcam-controls"
+                    style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 1rem;">
                     <button id="start-webcam" class="btn-verify">DÉMARRER LA CAMÉRA</button>
-                    <button id="stop-webcam" class="btn-verify mismatch" style="background: var(--danger); border:none;" hidden>ARRÊTER</button>
+                    <button id="stop-webcam" class="btn-verify mismatch" style="background: var(--danger); border:none;"
+                        hidden>ARRÊTER</button>
                 </div>
             </div>
 
@@ -143,6 +152,68 @@
                     <!-- Gallery items will be injected here -->
                     <div class="loading-gallery">Chargement de la galerie...</div>
                 </div>
+            </div>
+
+            <!-- Challenge (Défi IA) View -->
+            <div id="challenge-section" class="challenge-section" hidden>
+
+
+                <div class="challenge-scoreboard">
+                    <div class="score-card score-user">
+                        <span class="score-label">Vous</span>
+                        <span id="score-user" class="score-value">0</span>
+                    </div>
+                    <div class="score-divider">VS</div>
+                    <div class="score-card score-ai">
+                        <span class="score-label">IA</span>
+                        <span id="score-ai" class="score-value">0</span>
+                    </div>
+                </div>
+
+                <div class="challenge-board" id="challenge-board">
+                    <div class="challenge-comparison">
+                        <div class="comparison-item">
+                            <span class="probe-label">CIBLE (NIR)</span>
+                            <div class="probe-frame">
+                                <img id="challenge-probe-img" src="" alt="Cible NIR">
+                            </div>
+                        </div>
+                        <div class="vs-circle">VS</div>
+                        <div class="comparison-item">
+                            <span class="probe-label">CANDIDAT (VIS)</span>
+                            <div class="probe-frame">
+                                <img id="challenge-candidate-img" src="" alt="Candidat VIS">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="challenge-choices" id="challenge-choices">
+                        <button id="choice-same" class="btn-verify">MÊME PERSONNE</button>
+                        <button id="choice-different" class="btn-verify mismatch">PERSONNE DIFFÉRENTE</button>
+                    </div>
+
+                    <div id="challenge-reveal" class="challenge-reveal" hidden>
+                        <div class="reveal-row">
+                            <span class="reveal-label">Bonne réponse</span>
+                            <span id="reveal-correct" class="reveal-value correct">—</span>
+                        </div>
+                        <div class="reveal-row">
+                            <span class="reveal-label">Choix de l'IA</span>
+                            <span id="reveal-ai" class="reveal-value">—</span>
+                        </div>
+                        <div class="reveal-row">
+                            <span class="reveal-label">Votre choix</span>
+                            <span id="reveal-user" class="reveal-value">—</span>
+                        </div>
+                    </div>
+
+                    <div class="challenge-actions">
+                        <button id="challenge-next-btn" class="btn-verify" hidden>NOUVEAU DÉFI</button>
+                    </div>
+                </div>
+
+                <div id="challenge-loading" class="loading-gallery" hidden>Préparation du défi...</div>
+                <div id="challenge-error" class="loading-gallery" hidden></div>
             </div>
 
             <!-- Dashboard View -->
@@ -180,9 +251,11 @@
                     </div>
                     <div class="stats-card wide">
                         <h3>Informations Projet</h3>
-                        <p>Ce système utilise une architecture à deux flux basée sur ResNet-18 pour faire correspondre des images de visages à travers les spectres visible (VIS) et infrarouge proche (NIR).</p>
+                        <p>Ce système utilise une architecture à deux flux basée sur ResNet-18 pour faire correspondre
+                            des images de visages à travers les spectres visible (VIS) et infrarouge proche (NIR).</p>
                         <ul class="info-list">
-                            <li><strong>Prétraitement :</strong> Détection faciale Haar Cascade + Recadrage dynamique.</li>
+                            <li><strong>Prétraitement :</strong> Détection faciale Haar Cascade + Recadrage dynamique.
+                            </li>
                             <li><strong>XAI :</strong> Integrated Gradients pour l'explicabilité visuelle.</li>
                             <li><strong>Distance :</strong> Similarité Cosinus dans l'espace latent de 512-D.</li>
                         </ul>
@@ -194,4 +267,5 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
+
 </html>

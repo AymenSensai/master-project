@@ -1,5 +1,6 @@
 import os
 import io
+import random
 import base64
 import torch
 import torch.nn as nn
@@ -31,6 +32,8 @@ IMG_SIZE = config['dataset']['img_size']
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DATA_ROOT = config['dataset']['root_dir']
 VIS_GALLERY_PATH = os.path.join(DATA_ROOT, 'VIS')
+NIR_GALLERY_PATH = os.path.join(DATA_ROOT, 'NIR')
+_IMG_EXTS = ('.jpg', '.jpeg', '.png', '.bmp')
 
 # Initialize Haar Cascade for Face Detection
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -116,8 +119,21 @@ def compare():
     nir_data = nir_file.read()
     
     try:
-        vis_tensor = preprocess_image(vis_data)
-        nir_tensor = preprocess_image(nir_data)
+        nparr_vis = np.frombuffer(vis_data, np.uint8)
+        img_vis = cv2.imdecode(nparr_vis, cv2.IMREAD_COLOR)
+        
+        nparr_nir = np.frombuffer(nir_data, np.uint8)
+        img_nir = cv2.imdecode(nparr_nir, cv2.IMREAD_COLOR)
+
+        if img_vis is None or img_nir is None:
+            return jsonify({'error': 'Images invalides'}), 400
+
+        # Detect and crop faces for both images to ensure model consistency
+        face_vis, _ = detect_and_crop_face(img_vis, padding=0.15)
+        face_nir, _ = detect_and_crop_face(img_nir, padding=0.15)
+
+        vis_tensor = transform(Image.fromarray(cv2.cvtColor(face_vis, cv2.COLOR_BGR2RGB))).unsqueeze(0).to(DEVICE)
+        nir_tensor = transform(Image.fromarray(cv2.cvtColor(face_nir, cv2.COLOR_BGR2RGB))).unsqueeze(0).to(DEVICE)
         
         with torch.no_grad():
             vis_embed = model(vis_tensor)
@@ -166,7 +182,7 @@ def recognize():
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
             return jsonify({'error': 'Image invalide'}), 400
-            
+
         face_img, face_box = detect_and_crop_face(img, padding=0.15)
         face_detected = face_box is not None
         
@@ -189,7 +205,7 @@ def recognize():
 
         if results:
             best_match = results[0]
-            threshold = 0.70
+            threshold = 0.60
             app.logger.info(f"DEBUG: Current recognition threshold is {threshold}")
             similarity = float(best_match['similarity'])
             matched = similarity >= threshold
@@ -255,6 +271,63 @@ def get_stats():
             'status': 'Online'
         })
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def _list_nir_images(identity):
+    id_dir = os.path.join(NIR_GALLERY_PATH, identity)
+    if not os.path.isdir(id_dir):
+        return []
+    return [os.path.join(id_dir, f) for f in os.listdir(id_dir)
+            if f.lower().endswith(_IMG_EXTS)]
+
+@app.route('/api/challenge/new', methods=['GET'])
+def challenge_new():
+    try:
+        gallery_items = list(gallery.embeddings)
+        if len(gallery_items) < 2:
+            return jsonify({'error': 'Galerie insuffisante (minimum 2 identités requises).'}), 400
+
+        identities_with_nir = [it for it in gallery_items if _list_nir_images(it['identity'])]
+        if not identities_with_nir:
+            return jsonify({'error': "Aucune image NIR trouvée pour générer un défi."}), 400
+
+        # Choose a target identity for the NIR probe
+        target = random.choice(identities_with_nir)
+        nir_candidates = _list_nir_images(target['identity'])
+        probe_path = random.choice(nir_candidates)
+
+        # Decide if this challenge will be a "Same" or "Different" case
+        is_same = random.choice([True, False])
+        
+        if is_same:
+            candidate = target
+        else:
+            distractor_pool = [it for it in gallery_items if it['identity'] != target['identity']]
+            candidate = random.choice(distractor_pool)
+
+        # AI prediction: embed the NIR probe and compare with candidate VIS embedding
+        nir_bgr = cv2.imread(probe_path)
+        face_img, _ = detect_and_crop_face(nir_bgr, padding=0.15)
+        face_rgb = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+        tensor = transform(Image.fromarray(face_rgb)).unsqueeze(0).to(DEVICE)
+        with torch.no_grad():
+            probe_embed = model(tensor).cpu().numpy()[0]
+
+        similarity = float(np.dot(probe_embed, candidate['embedding']))
+        threshold = 0.50 # Using the same threshold as in /api/compare
+        ai_same = similarity >= threshold
+
+        return jsonify({
+            'probe_url': f"/data/{os.path.relpath(probe_path, DATA_ROOT)}",
+            'candidate_url': f"/data/{os.path.relpath(candidate['path'], DATA_ROOT)}",
+            'is_same': is_same,
+            'ai_same': ai_same,
+            'similarity': round(similarity, 4),
+            'target_identity': target['identity'],
+            'candidate_identity': candidate['identity']
+        })
+    except Exception as e:
+        app.logger.error(f"Challenge error: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

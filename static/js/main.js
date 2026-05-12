@@ -22,7 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const modeVerify = document.getElementById('mode-verify');
     const modeRecognize = document.getElementById('mode-recognize');
     const modeLive = document.getElementById('mode-live');
+    const modeChallenge = document.getElementById('mode-challenge');
     const modeDashboard = document.getElementById('mode-dashboard');
+    const challengeSection = document.getElementById('challenge-section');
     const identityList = document.getElementById('identity-list');
     const faceCanvas = document.getElementById('face-canvas');
 
@@ -33,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const statDevice = document.getElementById('stat-device');
 
     const xaiSection = document.getElementById('xai-section');
+    const xaiOriginal = document.getElementById('xai-original');
+    const xaiHeatmap = document.getElementById('xai-heatmap');
     const webcamSection = document.getElementById('webcam-section');
     const webcamVideo = document.getElementById('webcam-video');
     const webcamCanvas = document.getElementById('webcam-canvas');
@@ -46,12 +50,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMode = 'verify';
     let webcamStream = null;
     let isLiveProcessing = false;
+    let scoreBuffer = [];
+    const BUFFER_SIZE = 6;
 
     // Mode Switching
     modeVerify.addEventListener('click', () => switchMode('verify'));
     modeRecognize.addEventListener('click', () => switchMode('recognize'));
     modeLive.addEventListener('click', () => switchMode('live'));
     modeGallery.addEventListener('click', () => switchMode('gallery'));
+    modeChallenge.addEventListener('click', () => switchMode('challenge'));
     modeDashboard.addEventListener('click', () => switchMode('dashboard'));
 
     startWebcamBtn.addEventListener('click', startWebcam);
@@ -65,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modeRecognize.classList.toggle('active', mode === 'recognize');
         modeLive.classList.toggle('active', mode === 'live');
         modeGallery.classList.toggle('active', mode === 'gallery');
+        modeChallenge.classList.toggle('active', mode === 'challenge');
         modeDashboard.classList.toggle('active', mode === 'dashboard');
 
         // Reset images and results
@@ -86,31 +94,39 @@ document.addEventListener('DOMContentLoaded', () => {
         const galleryPeek = document.querySelector('.gallery-peek');
         const resultsContainer = document.getElementById('results-container');
 
-        const hideMain = mode === 'gallery' || mode === 'dashboard' || mode === 'live';
+        const hideMain = mode === 'gallery' || mode === 'dashboard' || mode === 'live' || mode === 'challenge';
         btnText.textContent = hideMain ? '' : (mode === 'verify' ? 'VÉRIFIER L\'IDENTITÉ' : 'RECONNAÎTRE LE VISAGE');
 
         if (comparisonGrid) comparisonGrid.style.display = hideMain ? 'none' : '';
-        if (actionSection)  actionSection.style.display  = hideMain ? 'none' : '';
-        if (galleryPeek)    galleryPeek.style.display    = hideMain ? 'none' : '';
+        if (actionSection) actionSection.style.display = hideMain ? 'none' : '';
+        if (galleryPeek) galleryPeek.style.display = hideMain ? 'none' : '';
         if (resultsContainer && hideMain) resultsContainer.hidden = true;
 
         gallerySection.style.display = (mode === 'gallery') ? 'block' : 'none';
         dashboardSection.style.display = (mode === 'dashboard') ? 'block' : 'none';
         webcamSection.style.display = (mode === 'live') ? 'block' : 'none';
+        challengeSection.style.display = (mode === 'challenge') ? 'block' : 'none';
+
+        if (mode === 'recognize') {
+            nirUpload.querySelector('p').innerHTML = 'Cliquez ou glissez l\'image<br><strong>NIR</strong>';
+        } else {
+            nirUpload.querySelector('p').innerHTML = 'Cliquez ou glissez l\'image<br>NIR';
+        }
 
         if (mode !== 'live' && webcamStream) stopWebcam();
 
         if (mode === 'gallery') loadGallery();
         if (mode === 'recognize') loadIdentities();
         if (mode === 'dashboard') loadDashboard();
+        if (mode === 'challenge') loadChallenge();
 
         checkReady();
     }
 
     async function startWebcam() {
         try {
-            webcamStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 1280, height: 720, facingMode: "user" } 
+            webcamStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 1280, height: 720, facingMode: "user" }
             });
             webcamVideo.srcObject = webcamStream;
             startWebcamBtn.hidden = true;
@@ -155,12 +171,18 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const response = await fetch('/api/recognize', { method: 'POST', body: formData });
                 const data = await response.json();
-                
+
                 hudLatency.textContent = Date.now() - startTime;
-                
+
                 if (data.face_box) {
-                    drawLiveHUD(data.face_box, data.identity, data.matched, data.similarity);
+                    // Temporal Smoothing (Moving Average)
+                    scoreBuffer.push(data.similarity);
+                    if (scoreBuffer.length > BUFFER_SIZE) scoreBuffer.shift();
+                    const avgSimilarity = scoreBuffer.reduce((a, b) => a + b, 0) / scoreBuffer.length;
+                    
+                    drawLiveHUD(data.face_box, data.identity, data.matched, avgSimilarity);
                 } else {
+                    scoreBuffer = []; // Reset smoothing if face is lost
                     const ctxW = webcamCanvas.getContext('2d');
                     ctxW.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
                 }
@@ -188,9 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const w = box.w * scaleX;
         const h = box.h * scaleY;
 
-        const liveThreshold = 0.70;
+        const liveThreshold = 0.60;
         const isMatched = matched && (similarity >= liveThreshold);
-        
+
         const color = isMatched ? '#00ffff' : '#ff3b3b';
         const shadow = isMatched ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 59, 59, 0.5)';
 
@@ -204,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Draw Label
         ctx.fillStyle = color;
         ctx.font = 'bold 14px "Courier New"';
-        const label = isMatched ? `${identity.toUpperCase()} [${(similarity*100).toFixed(1)}%]` : "ID_UNKNOWN";
+        const label = isMatched ? `${identity.toUpperCase()} [${(similarity * 100).toFixed(1)}%]` : "ID_UNKNOWN";
         ctx.fillText(label, x, y - 10);
 
         // Cyberpunk brackets
@@ -311,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
             previewImg.src = e.target.result;
             previewImg.hidden = false;
             placeholder.style.opacity = '0';
-            
+
             // Clear and hide face canvas on new upload
             if (faceCanvas) {
                 faceCanvas.hidden = true;
@@ -471,6 +493,115 @@ document.addEventListener('DOMContentLoaded', () => {
         const displayWidth = Math.max(0, Math.min(100, percent));
         similarityFill.style.width = '0%';
         setTimeout(() => { similarityFill.style.width = `${displayWidth}%`; }, 50);
+    }
+
+    // Challenge (Défi IA) Mode
+    const challengeProbeImg = document.getElementById('challenge-probe-img');
+    const challengeCandidateImg = document.getElementById('challenge-candidate-img');
+    const challengeChoices = document.getElementById('challenge-choices');
+    const choiceSameBtn = document.getElementById('choice-same');
+    const choiceDifferentBtn = document.getElementById('choice-different');
+    const challengeReveal = document.getElementById('challenge-reveal');
+    const revealCorrect = document.getElementById('reveal-correct');
+    const revealAi = document.getElementById('reveal-ai');
+    const revealUser = document.getElementById('reveal-user');
+    const challengeNextBtn = document.getElementById('challenge-next-btn');
+    const challengeLoading = document.getElementById('challenge-loading');
+    const challengeError = document.getElementById('challenge-error');
+    const challengeBoard = document.getElementById('challenge-board');
+    const scoreUserEl = document.getElementById('score-user');
+    const scoreAiEl = document.getElementById('score-ai');
+
+    let currentChallenge = null;
+    let challengeLocked = false;
+    let scoreUser = 0;
+    let scoreAi = 0;
+
+    challengeNextBtn.addEventListener('click', loadChallenge);
+    choiceSameBtn.addEventListener('click', () => onChoiceMade(true));
+    choiceDifferentBtn.addEventListener('click', () => onChoiceMade(false));
+
+    async function loadChallenge() {
+        challengeLocked = false;
+        currentChallenge = null;
+        challengeError.hidden = true;
+        challengeError.textContent = '';
+        challengeReveal.hidden = true;
+        challengeBoard.style.display = 'none';
+        challengeLoading.hidden = false;
+        challengeNextBtn.hidden = true;
+        
+        // Reset button states
+        choiceSameBtn.disabled = false;
+        choiceDifferentBtn.disabled = false;
+        choiceSameBtn.classList.remove('is-correct', 'is-wrong', 'is-user-pick', 'is-ai-pick');
+        choiceDifferentBtn.classList.remove('is-correct', 'is-wrong', 'is-user-pick', 'is-ai-pick');
+
+        try {
+            const response = await fetch('/api/challenge/new');
+            const data = await response.json();
+            if (data.error) {
+                challengeError.textContent = data.error;
+                challengeError.hidden = false;
+                challengeLoading.hidden = true;
+                return;
+            }
+            currentChallenge = data;
+            renderChallenge(data);
+        } catch (err) {
+            console.error('Challenge fetch error:', err);
+            challengeError.textContent = "Impossible de charger le défi.";
+            challengeError.hidden = false;
+        } finally {
+            challengeLoading.hidden = true;
+        }
+    }
+
+    function renderChallenge(data) {
+        challengeBoard.style.display = '';
+        challengeProbeImg.src = data.probe_url;
+        challengeCandidateImg.src = data.candidate_url;
+        challengeBoard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function onChoiceMade(userChoice) {
+        if (challengeLocked || !currentChallenge) return;
+        challengeLocked = true;
+
+        const isSame = currentChallenge.is_same;
+        const aiChoice = currentChallenge.ai_same;
+        const userCorrect = userChoice === isSame;
+        const aiCorrect = aiChoice === isSame;
+
+        if (userCorrect) scoreUser++;
+        if (aiCorrect) scoreAi++;
+        scoreUserEl.textContent = scoreUser;
+        scoreAiEl.textContent = scoreAi;
+
+        // Visual feedback on buttons
+        const correctBtn = isSame ? choiceSameBtn : choiceDifferentBtn;
+        const wrongBtn = isSame ? choiceDifferentBtn : choiceSameBtn;
+        const userBtn = userChoice ? choiceSameBtn : choiceDifferentBtn;
+        const aiBtn = aiChoice ? choiceSameBtn : choiceDifferentBtn;
+
+        choiceSameBtn.disabled = true;
+        choiceDifferentBtn.disabled = true;
+
+        correctBtn.classList.add('is-correct');
+        userBtn.classList.add('is-user-pick');
+        aiBtn.classList.add('is-ai-pick');
+        
+        if (!userCorrect) userBtn.classList.add('is-wrong');
+
+        revealCorrect.textContent = isSame ? "Même personne" : "Personnes différentes";
+        revealAi.textContent = `${aiChoice ? "Même" : "Différente"} ${aiCorrect ? '✓' : '✗'}`;
+        revealAi.className = `reveal-value ${aiCorrect ? 'correct' : 'wrong'}`;
+        revealUser.textContent = `${userChoice ? "Même" : "Différente"} ${userCorrect ? '✓' : '✗'}`;
+        revealUser.className = `reveal-value ${userCorrect ? 'correct' : 'wrong'}`;
+        challengeReveal.hidden = false;
+        challengeReveal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        challengeNextBtn.hidden = false;
+        challengeNextBtn.textContent = 'NOUVEAU DÉFI';
     }
 
     // Drag and Drop
