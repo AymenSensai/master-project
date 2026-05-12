@@ -112,7 +112,7 @@ The application implements **Grad-CAM** (Gradient-weighted Class Activation Mapp
 - `app.py`: Main Flask application entry point.
 - `model.py`: Architecture definition (features and classification layers).
 - `gallery_manager.py`: Logic for managing the identity gallery and similarity search.
-- `dataset.py`: Custom PyTorch dataset loader for CASIA NIR-VIS.
+- `dataset.py`: Custom PyTorch dataset loader for TuftsFaceDatabase.
 - `xai_utils.py`: Utility for generating Explainable AI heatmaps.
 - `gallery/`: Identity storage folder (structure: `gallery/Identity_Name/*.jpg`).
 - `static/` & `templates/`: Frontend assets and HTML.
@@ -124,7 +124,3 @@ The application implements **Grad-CAM** (Gradient-weighted Class Activation Mapp
 3. **Domain Alignment**: The network is trained using a combination of Cross-Entropy and Triplet Loss to bridge the gap between VIS and NIR sensors.
 4. **Matching**: Similarity is measured using Cosine Distance.
 5. **Visualization**: Grad-CAM heatmaps highlight pixels contributing most to the identity decision.
-
----
-
-_Created as part of a Master Project on Advanced Biometric Systems._

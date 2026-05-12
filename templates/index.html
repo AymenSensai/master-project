@@ -16,71 +16,90 @@
             <div class="mode-toggle">
                 <button class="mode-btn active" id="mode-verify">VÉRIFICATION</button>
                 <button class="mode-btn" id="mode-recognize">RECONNAISSANCE</button>
-                <button class="mode-btn" id="mode-live">EN DIRECT</button>
+                <button class="mode-btn" id="mode-live">LIVE HUD</button>
+                <button class="mode-btn" id="mode-gallery">GALERIE</button>
                 <button class="mode-btn" id="mode-dashboard">TABLEAU DE BORD</button>
             </div>
         </header>
 
         <main>
-            <div class="comparison-grid">
-                <div class="upload-card" id="vis-card">
-                    <div class="card-header">
-                        <span class="badge badge-vis">VISIBLE (VIS)</span>
-                    </div>
-                    <div class="upload-area" id="vis-upload">
-                        <input type="file" id="vis-input" accept="image/*" hidden>
-                        <div class="upload-placeholder">
-                            <div class="icon">📸</div>
-                            <p>Cliquez ou glissez l'image<br>VIS</p>
+            <div class="content-area">
+                <div class="comparison-grid">
+                    <div class="upload-card" id="vis-card">
+                        <div class="card-header">
+                            <span class="badge badge-vis">VISIBLE (VIS)</span>
                         </div>
-                        <img id="vis-preview" class="image-preview" src="" alt="Aperçu VIS" hidden>
-                    </div>
-                </div>
-
-                <div class="vs-divider">
-                    <div class="vs-line"></div>
-                    <div class="vs-circle">VS</div>
-                    <div class="vs-line"></div>
-                </div>
-
-                <div class="upload-card" id="nir-card">
-                    <div class="card-header">
-                        <span class="badge badge-nir">INFRAROUGE (NIR)</span>
-                    </div>
-                    <div class="upload-area" id="nir-upload">
-                        <input type="file" id="nir-input" accept="image/*" hidden>
-                        <div class="upload-placeholder">
-                            <div class="icon">🔍</div>
-                            <p>Cliquez ou glissez l'image<br>NIR</p>
+                        <div class="upload-area" id="vis-upload">
+                            <input type="file" id="vis-input" accept="image/*" hidden>
+                            <div class="upload-placeholder">
+                                <div class="icon">📸</div>
+                                <p>Cliquez ou glissez l'image<br>VIS</p>
+                            </div>
+                            <img id="vis-preview" class="image-preview" src="" alt="Aperçu VIS" hidden>
                         </div>
-                        <img id="nir-preview" class="image-preview" src="" alt="Aperçu NIR" hidden>
-                        <canvas id="face-canvas" class="image-preview" hidden></canvas>
+                    </div>
+
+                    <div class="vs-divider">
+                        <div class="vs-line"></div>
+                        <div class="vs-circle">VS</div>
+                        <div class="vs-line"></div>
+                    </div>
+
+                    <div class="upload-card" id="nir-card">
+                        <div class="card-header">
+                            <span class="badge badge-nir">INFRAROUGE (NIR)</span>
+                        </div>
+                        <div class="upload-area" id="nir-upload">
+                            <input type="file" id="nir-input" accept="image/*" hidden>
+                            <div class="upload-placeholder">
+                                <div class="icon">🔍</div>
+                                <p>Cliquez ou glissez l'image<br>NIR</p>
+                            </div>
+                            <img id="nir-preview" class="image-preview" src="" alt="Aperçu NIR" hidden>
+                            <canvas id="face-canvas" class="image-preview" hidden></canvas>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Webcam Container -->
-            <div id="webcam-card" class="upload-card" hidden>
-                <div class="card-header">
-                    <span class="badge badge-live">FLUX EN TEMPS RÉEL</span>
-                    <h3>Reconnaissance par Webcam</h3>
+<div class="action-section">
+                    <button id="verify-btn" class="btn-verify" disabled>
+                        <span class="btn-text">VÉRIFIER L'IDENTITÉ</span>
+                        <span class="loader" hidden></span>
+                    </button>
                 </div>
-                <div class="webcam-container">
-                    <video id="webcam-video" autoplay playsinline muted></video>
-                    <canvas id="webcam-canvas"></canvas>
-                    <div id="webcam-status" class="webcam-overlay-status">Initialisation de la caméra...</div>
-                    <div id="webcam-live-stats" class="webcam-live-stats" hidden>
-                        <div class="stat-row"><span class="label">Meilleure Correspondance :</span> <span id="live-identity" class="value">-</span></div>
-                        <div class="stat-row"><span class="label">Similarité :</span> <span id="live-similarity" class="value">0%</span></div>
+
+                <div id="result-container" class="result-card" hidden>
+                    <div class="result-header">
+                        <div id="status-icon" class="status-icon"></div>
+                        <h2 id="result-status">CORRESPONDANCE TROUVÉE</h2>
+                    </div>
+                    <div class="result-body">
+                        <div class="metric">
+                            <span class="label">Score de Similarité</span>
+                            <div class="progress-bar">
+                                <div id="similarity-fill" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                            <span id="similarity-value" class="value">0%</span>
+                        </div>
+                        <p id="result-message" class="message"></p>
+                        <div id="xai-section" hidden>
+                            <div class="xai-header">
+                                <h4>Carte d'Attribution (Integrated Gradients)</h4>
+                                <p>Les zones chaudes indiquent les pixels ayant le plus contribué à la correspondance.</p>
+                            </div>
+                            <div class="heatmap-comparison">
+                                <div class="img-box">
+                                    <span class="label">Sonde (NIR)</span>
+                                    <img id="xai-original" src="" alt="Sonde NIR">
+                                </div>
+                                <div class="img-box">
+                                    <span class="label">Carte d'Attribution</span>
+                                    <img id="xai-heatmap" src="" alt="Carte Attribution">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="action-section">
-                <button id="verify-btn" class="btn-verify" disabled>
-                    <span class="btn-text">VÉRIFIER L'IDENTITÉ</span>
-                    <span class="loader" hidden></span>
-                </button>
             </div>
 
             <div id="results-container" class="results-panel" hidden>
@@ -92,101 +111,82 @@
                 </div>
             </div>
 
-            <!-- XAI Insights Panel (Missing in original index.html) -->
-            <div id="insights-panel" class="insights-panel" hidden>
-                <div class="panel-header">
-                    <div class="header-main">
-                        <h4>Aperçus du Réseau de Neurones</h4>
-                        <p>Carte d'activation thermique montrant les caractéristiques clés utilisées pour la correspondance.</p>
+            <!-- Webcam / Live HUD View -->
+            <div id="webcam-section" class="webcam-section" hidden>
+                <div class="webcam-container">
+                    <video id="webcam-video" autoplay playsinline muted></video>
+                    <canvas id="webcam-canvas"></canvas>
+                    <div class="hud-overlay">
+                        <div class="scan-line"></div>
+                        <div class="hud-corners">
+                            <div class="corner tl"></div>
+                            <div class="corner tr"></div>
+                            <div class="corner bl"></div>
+                            <div class="corner br"></div>
+                        </div>
+                        <div class="hud-data">
+                            <div class="data-item">SPECTRUM: <span class="cyan">NIR_EMULATED</span></div>
+                            <div class="data-item">STATUS: <span id="hud-status" class="cyan">READY</span></div>
+                            <div class="data-item">LATENCY: <span id="hud-latency" class="cyan">--</span>ms</div>
+                        </div>
                     </div>
-                    <button id="close-insights" class="btn-close">&times;</button>
                 </div>
-                <div class="insights-body">
-                    <div class="heatmap-comparison">
-                        <div class="img-box">
-                            <span class="label">Sonde Originale (NIR)</span>
-                            <img id="xai-original" src="" alt="Sonde NIR">
-                        </div>
-                        <div class="img-box">
-                            <span class="label">Carte d'Activation</span>
-                            <img id="xai-heatmap" src="" alt="Carte Thermique">
-                        </div>
-                    </div>
-                    <div class="insights-explanation">
-                        <h5>Analyse Spectrale</h5>
-                        <p>Les zones en <span class="high-activation">rouge</span> indiquent les repères faciaux que le modèle a trouvés les plus discriminants pour cette identification (yeux, nez, contour des lèvres).</p>
-                    </div>
+                <div class="webcam-controls" style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 1rem;">
+                    <button id="start-webcam" class="btn-verify">DÉMARRER LA CAMÉRA</button>
+                    <button id="stop-webcam" class="btn-verify mismatch" style="background: var(--danger); border:none;" hidden>ARRÊTER</button>
+                </div>
+            </div>
+
+            <!-- Gallery View -->
+            <div id="gallery-section" class="gallery-section" hidden>
+                <div id="gallery-grid" class="gallery-grid">
+                    <!-- Gallery items will be injected here -->
+                    <div class="loading-gallery">Chargement de la galerie...</div>
                 </div>
             </div>
 
             <!-- Dashboard View -->
             <div id="dashboard-section" class="dashboard-section" hidden>
                 <div class="dashboard-grid">
-                    <div class="stat-card">
-                        <span class="stat-label">Identités Totales</span>
-                        <span id="stat-total" class="stat-value">0</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Précision du Modèle</span>
-                        <span id="stat-precision" class="stat-value">98.4%</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Précision Spectrale</span>
-                        <span id="stat-accuracy" class="stat-value">96.2%</span>
-                    </div>
-                </div>
-
-                <div class="analytics-row">
-                    <div class="analytics-card">
-                        <h3>Démographie de la Galerie</h3>
-                        <div class="distribution-list">
-                            <div class="dist-item">
-                                <div class="dist-info"><span>Homme</span> <span id="dist-male">0</span></div>
-                                <div class="dist-bar"><div id="bar-male" class="dist-fill" style="width: 0%"></div></div>
-                            </div>
-                            <div class="dist-item">
-                                <div class="dist-info"><span>Femme</span> <span id="dist-female">0</span></div>
-                                <div class="dist-bar"><div id="bar-female" class="dist-fill" style="width: 0%"></div></div>
-                            </div>
-                            <div class="dist-item">
-                                <div class="dist-info"><span>Asiatique</span> <span id="dist-asian">0</span></div>
-                                <div class="dist-bar"><div id="bar-asian" class="dist-fill secondary" style="width: 0%"></div></div>
-                            </div>
-                            <div class="dist-item">
-                                <div class="dist-info"><span>Autre</span> <span id="dist-other">0</span></div>
-                                <div class="dist-bar"><div id="bar-other" class="dist-fill secondary" style="width: 0%"></div></div>
-                            </div>
+                    <div class="stats-card">
+                        <h3>Base de Données</h3>
+                        <div class="stat-item">
+                            <span class="stat-label">Identités Totales</span>
+                            <span id="stat-identities" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Images VIS</span>
+                            <span id="stat-vis" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Images NIR</span>
+                            <span id="stat-nir" class="stat-value">--</span>
                         </div>
                     </div>
-                    <div class="analytics-card">
-                        <h3>Santé du Système</h3>
-                        <div class="health-indicator">
-                            <div class="status-dot online"></div>
-                            <span>Tous les modèles sont chargés et actifs</span>
+                    <div class="stats-card">
+                        <h3>Système & Modèle</h3>
+                        <div class="stat-item">
+                            <span class="stat-label">Modèle</span>
+                            <span class="stat-value">ResNet-18</span>
                         </div>
-                        <div class="system-log">
-                            <div class="log-item"><span>Réseau de Neurones :</span> <span class="badge-success">ResNet-18</span></div>
-                            <div class="log-item"><span>Métrique de Similarité :</span> <span class="badge-success">Cosine</span></div>
-                            <div class="log-item"><span>Pré-traitement :</span> <span class="badge-success">MTCNN/Haar</span></div>
+                        <div class="stat-item">
+                            <span class="stat-label">Calcul</span>
+                            <span id="stat-device" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Statut</span>
+                            <span class="stat-value green">Opérationnel</span>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <div id="result-container" class="result-card" hidden>
-                <div class="result-header">
-                    <div id="status-icon" class="status-icon"></div>
-                    <h2 id="result-status">CORRESPONDANCE TROUVÉE</h2>
-                </div>
-                <div class="result-body">
-                    <div class="metric">
-                        <span class="label">Score de Similarité</span>
-                        <div class="progress-bar">
-                            <div id="similarity-fill" class="progress-fill" style="width: 0%"></div>
-                        </div>
-                        <span id="similarity-value" class="value">0%</span>
+                    <div class="stats-card wide">
+                        <h3>Informations Projet</h3>
+                        <p>Ce système utilise une architecture à deux flux basée sur ResNet-18 pour faire correspondre des images de visages à travers les spectres visible (VIS) et infrarouge proche (NIR).</p>
+                        <ul class="info-list">
+                            <li><strong>Prétraitement :</strong> Détection faciale Haar Cascade + Recadrage dynamique.</li>
+                            <li><strong>XAI :</strong> Integrated Gradients pour l'explicabilité visuelle.</li>
+                            <li><strong>Distance :</strong> Similarité Cosinus dans l'espace latent de 512-D.</li>
+                        </ul>
                     </div>
-                    <p id="result-message" class="message">Les identités dans les domaines VIS et NIR correspondent avec une grande confiance.</p>
                 </div>
             </div>
         </main>

@@ -4,6 +4,10 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from typing import Tuple, List, Dict
+import numpy as np
+import cv2
+
+from utils import detect_and_crop_face
 
 class TuftsFaceDataset(Dataset):
     """
@@ -20,11 +24,12 @@ class TuftsFaceDataset(Dataset):
                 TD_IR_A_1_0.jpg
             ...
     """
-    def __init__(self, root_dir: str, split: str = 'train', img_size: int = 112):
+    def __init__(self, root_dir: str, split: str = 'train', img_size: int = 112, crop_faces: bool = True):
         super().__init__()
         self.root_dir = root_dir
         self.split = split
         self.img_size = img_size
+        self.crop_faces = crop_faces
         
         # Determine standard ImageNet normalization
         # or specific normalization if needed. We use generic here.
@@ -121,16 +126,27 @@ class TuftsFaceDataset(Dataset):
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int, int]:
         img_path, label, domain = self.samples[index]
         
-        # Convert all to RGB to ensure 3 channels
-        # If NIR is grayscale (1 channel), converting to RGB duplicates it to 3 channels
-        image = Image.open(img_path).convert('RGB')
+        # Load image with OpenCV to allow face detection
+        img_bgr = cv2.imread(img_path)
+        if img_bgr is None:
+            # Fallback if image is corrupt
+            image = Image.new('RGB', (self.img_size, self.img_size))
+        else:
+            if self.crop_faces:
+                # Use the same unified cropping as in inference
+                face_img, _ = detect_and_crop_face(img_bgr, padding=0.15)
+                # Convert BGR to RGB
+                face_rgb = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+                image = Image.fromarray(face_rgb)
+            else:
+                image = Image.fromarray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
             
         if self.transform:
             image = self.transform(image)
             
         return image, label, domain
 
-def get_dataloader(root_dir: str, split: str, batch_size: int, img_size: int, num_workers: int):
-    dataset = TuftsFaceDataset(root_dir=root_dir, split=split, img_size=img_size)
+def get_dataloader(root_dir: str, split: str, batch_size: int, img_size: int, num_workers: int, crop_faces: bool = True):
+    dataset = TuftsFaceDataset(root_dir=root_dir, split=split, img_size=img_size, crop_faces=crop_faces)
     shuffle = (split == 'train')
     return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last=shuffle)

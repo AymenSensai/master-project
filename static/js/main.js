@@ -15,302 +15,251 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnLoader = verifyBtn.querySelector('.loader');
     const btnText = verifyBtn.querySelector('.btn-text');
 
-    const modeDashboard = document.getElementById('mode-dashboard');
-    const dashboardSection = document.getElementById('dashboard-section');
-    const statTotal = document.getElementById('stat-total');
-    const statPrecision = document.getElementById('stat-precision');
-    const statAccuracy = document.getElementById('stat-accuracy');
-    const distMale = document.getElementById('dist-male');
-    const distFemale = document.getElementById('dist-female');
-    const distAsian = document.getElementById('dist-asian');
-    const distOther = document.getElementById('dist-other');
-    const barMale = document.getElementById('bar-male');
-    const barFemale = document.getElementById('bar-female');
-    const barAsian = document.getElementById('bar-asian');
-    const barOther = document.getElementById('bar-other');
+    const modeGallery = document.getElementById('mode-gallery');
+    const gallerySection = document.getElementById('gallery-section');
+    const galleryGrid = document.getElementById('gallery-grid');
 
     const modeVerify = document.getElementById('mode-verify');
     const modeRecognize = document.getElementById('mode-recognize');
     const modeLive = document.getElementById('mode-live');
+    const modeDashboard = document.getElementById('mode-dashboard');
     const identityList = document.getElementById('identity-list');
     const faceCanvas = document.getElementById('face-canvas');
 
-    const webcamCard = document.getElementById('webcam-card');
+    const dashboardSection = document.getElementById('dashboard-section');
+    const statIdentities = document.getElementById('stat-identities');
+    const statVis = document.getElementById('stat-vis');
+    const statNir = document.getElementById('stat-nir');
+    const statDevice = document.getElementById('stat-device');
+
+    const xaiSection = document.getElementById('xai-section');
+    const webcamSection = document.getElementById('webcam-section');
     const webcamVideo = document.getElementById('webcam-video');
     const webcamCanvas = document.getElementById('webcam-canvas');
-    const webcamStatus = document.getElementById('webcam-status');
-    const insightsPanel = document.getElementById('insights-panel');
-    const xaiOriginal = document.getElementById('xai-original');
-    const xaiHeatmap = document.getElementById('xai-heatmap');
-    const closeInsights = document.getElementById('close-insights');
+    const startWebcamBtn = document.getElementById('start-webcam');
+    const stopWebcamBtn = document.getElementById('stop-webcam');
+    const hudStatus = document.getElementById('hud-status');
+    const hudLatency = document.getElementById('hud-latency');
 
     let visFile = null;
     let nirFile = null;
-    let currentMode = 'verify'; // 'verify', 'recognize', or 'live'
+    let currentMode = 'verify';
     let webcamStream = null;
-    let recognitionInterval = null;
+    let isLiveProcessing = false;
 
     // Mode Switching
     modeVerify.addEventListener('click', () => switchMode('verify'));
     modeRecognize.addEventListener('click', () => switchMode('recognize'));
     modeLive.addEventListener('click', () => switchMode('live'));
+    modeGallery.addEventListener('click', () => switchMode('gallery'));
     modeDashboard.addEventListener('click', () => switchMode('dashboard'));
 
-    async function switchMode(mode) {
+    startWebcamBtn.addEventListener('click', startWebcam);
+    stopWebcamBtn.addEventListener('click', stopWebcam);
+
+    function switchMode(mode) {
         currentMode = mode;
         document.body.className = `${mode}-mode`;
-        
+
         modeVerify.classList.toggle('active', mode === 'verify');
         modeRecognize.classList.toggle('active', mode === 'recognize');
         modeLive.classList.toggle('active', mode === 'live');
+        modeGallery.classList.toggle('active', mode === 'gallery');
         modeDashboard.classList.toggle('active', mode === 'dashboard');
-        
-        // Update Action Button Text
-        btnText.textContent = (mode === 'live' || mode === 'dashboard') ? '' : (mode === 'verify' ? 'VÉRIFIER L\'IDENTITÉ' : 'RECONNAÎTRE LE VISAGE');
-        
-        // Reset results and check readiness
+
+        // Reset images and results
+        visFile = null;
+        nirFile = null;
+        visInput.value = '';
+        nirInput.value = '';
+        visPreview.hidden = true;
+        visPreview.src = '';
+        nirPreview.hidden = true;
+        nirPreview.src = '';
+        if (faceCanvas) faceCanvas.hidden = true;
+        visUpload.querySelector('.upload-placeholder').style.opacity = '';
+        nirUpload.querySelector('.upload-placeholder').style.opacity = '';
         resultContainer.hidden = true;
-        webcamCard.hidden = mode !== 'live';
-        dashboardSection.hidden = mode !== 'dashboard';
-        
+
         const comparisonGrid = document.querySelector('.comparison-grid');
         const actionSection = document.querySelector('.action-section');
         const galleryPeek = document.querySelector('.gallery-peek');
         const resultsContainer = document.getElementById('results-container');
-        
-        if (comparisonGrid) {
-            comparisonGrid.style.display = (mode === 'dashboard' || mode === 'live') ? 'none' : '';
-        }
-        if (actionSection) {
-            actionSection.style.display = (mode === 'dashboard' || mode === 'live') ? 'none' : '';
-        }
-        if (galleryPeek) {
-            galleryPeek.style.display = mode === 'dashboard' ? 'none' : '';
-        }
-        if (resultsContainer && mode === 'dashboard') {
-            resultsContainer.hidden = true;
-        }
-        
-        if (mode === 'dashboard') {
-            loadAnalytics();
-        }
-        
+
+        const hideMain = mode === 'gallery' || mode === 'dashboard' || mode === 'live';
+        btnText.textContent = hideMain ? '' : (mode === 'verify' ? 'VÉRIFIER L\'IDENTITÉ' : 'RECONNAÎTRE LE VISAGE');
+
+        if (comparisonGrid) comparisonGrid.style.display = hideMain ? 'none' : '';
+        if (actionSection)  actionSection.style.display  = hideMain ? 'none' : '';
+        if (galleryPeek)    galleryPeek.style.display    = hideMain ? 'none' : '';
+        if (resultsContainer && hideMain) resultsContainer.hidden = true;
+
+        gallerySection.style.display = (mode === 'gallery') ? 'block' : 'none';
+        dashboardSection.style.display = (mode === 'dashboard') ? 'block' : 'none';
+        webcamSection.style.display = (mode === 'live') ? 'block' : 'none';
+
+        if (mode !== 'live' && webcamStream) stopWebcam();
+
+        if (mode === 'gallery') loadGallery();
+        if (mode === 'recognize') loadIdentities();
+        if (mode === 'dashboard') loadDashboard();
+
         checkReady();
-        
-        // Handle Webcam Lifecycle
-        if (mode === 'live') {
-            await startWebcam();
-        } else {
-            stopWebcam();
-        }
-
-        if (mode === 'recognize' || mode === 'live') {
-            loadIdentities();
-        }
     }
-
-    async function loadAnalytics() {
-        try {
-            const response = await fetch('/api/analytics');
-            const data = await response.json();
-            
-            // Update stats with animation
-            animateValue(statTotal, 0, data.total_identities, 1000);
-            
-            if (statPrecision && data.model_precision) statPrecision.textContent = data.model_precision;
-            if (statAccuracy && data.cross_spectral_accuracy) statAccuracy.textContent = data.cross_spectral_accuracy;
-            
-            // Update demographics
-            const total = data.total_identities;
-            const male = data.gender_distribution.Male;
-            const female = data.gender_distribution.Female;
-            const asian = data.ethnicity_distribution.Asian;
-            const other = data.ethnicity_distribution.Other;
-            
-            distMale.textContent = male;
-            distFemale.textContent = female;
-            distAsian.textContent = asian;
-            distOther.textContent = other;
-            
-            barMale.style.width = `${(male / total) * 100}%`;
-            barFemale.style.width = `${(female / total) * 100}%`;
-            barAsian.style.width = `${(asian / total) * 100}%`;
-            barOther.style.width = `${(other / total) * 100}%`;
-            
-        } catch (error) {
-            console.error('Error loading analytics:', error);
-        }
-    }
-
-    function animateValue(obj, start, end, duration) {
-        let startTimestamp = null;
-        const step = (timestamp) => {
-            if (!startTimestamp) startTimestamp = timestamp;
-            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-            obj.innerHTML = Math.floor(progress * (end - start) + start);
-            if (progress < 1) {
-                window.requestAnimationFrame(step);
-            }
-        };
-        window.requestAnimationFrame(step);
-    }
-
-    let frameCount = 0;
 
     async function startWebcam() {
         try {
             webcamStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 1280, height: 720, facingMode: 'user' } 
+                video: { width: 1280, height: 720, facingMode: "user" } 
             });
             webcamVideo.srcObject = webcamStream;
-            webcamStatus.textContent = 'Caméra active - Démarrage de la boucle...';
-            
-            // Wait for video metadata
-            webcamVideo.onloadedmetadata = () => {
-                recognitionInterval = setInterval(() => {
-                    performLiveRecognition();
-                }, 600);
-            };
-            
+            startWebcamBtn.hidden = true;
+            stopWebcamBtn.hidden = false;
+            hudStatus.textContent = "SCANNING";
+            isLiveProcessing = true;
+            processLiveFrame();
         } catch (err) {
-            console.error('Webcam Error:', err);
-            webcamStatus.textContent = 'Erreur: Accès refusé à la caméra';
-            alert('Impossible d\'accéder à la webcam. Veuillez vérifier vos autorisations.');
+            console.error("Webcam Error:", err);
+            alert("Impossible d'accéder à la caméra. Vérifiez les permissions.");
         }
     }
 
     function stopWebcam() {
+        isLiveProcessing = false;
         if (webcamStream) {
             webcamStream.getTracks().forEach(track => track.stop());
             webcamStream = null;
         }
-        if (recognitionInterval) {
-            clearInterval(recognitionInterval);
-            recognitionInterval = null;
-        }
+        webcamVideo.srcObject = null;
+        startWebcamBtn.hidden = false;
+        stopWebcamBtn.hidden = true;
+        hudStatus.textContent = "OFFLINE";
         const ctx = webcamCanvas.getContext('2d');
         ctx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
-        webcamStatus.textContent = 'Caméra éteinte';
     }
 
-    const webcamLiveStats = document.getElementById('webcam-live-stats');
-    const liveIdentity = document.getElementById('live-identity');
-    const liveSimilarity = document.getElementById('live-similarity');
+    async function processLiveFrame() {
+        if (!isLiveProcessing || currentMode !== 'live') return;
 
-    async function performLiveRecognition() {
-        if (!webcamStream || currentMode !== 'live' || webcamVideo.videoWidth === 0) return;
+        const startTime = Date.now();
+        const canvas = document.createElement('canvas');
+        canvas.width = 640; // Smaller for speed
+        canvas.height = 360;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(webcamVideo, 0, 0, canvas.width, canvas.height);
 
-        frameCount++;
-        webcamStatus.textContent = `Analyse... [Image ${frameCount}]`;
-        webcamLiveStats.hidden = false;
+        canvas.toBlob(async (blob) => {
+            const formData = new FormData();
+            formData.append('image', blob, 'frame.jpg');
 
-        // Capture current frame
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = webcamVideo.videoWidth;
-        tempCanvas.height = webcamVideo.videoHeight;
-        const ctx = tempCanvas.getContext('2d');
-        ctx.drawImage(webcamVideo, 0, 0);
-        
-        // Convert to blob
-        const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/jpeg', 0.7));
-        if (!blob) return;
-
-        const formData = new FormData();
-        formData.append('image', blob, 'webcam.jpg');
-
-        try {
-            const response = await fetch('/api/recognize', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await response.json();
-            
-            if (data.error) {
-                webcamStatus.textContent = `Erreur API: ${data.error}`;
-                return;
+            try {
+                const response = await fetch('/api/recognize', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                hudLatency.textContent = Date.now() - startTime;
+                
+                if (data.face_box) {
+                    drawLiveHUD(data.face_box, data.identity, data.matched, data.similarity);
+                } else {
+                    const ctxW = webcamCanvas.getContext('2d');
+                    ctxW.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
+                }
+            } catch (e) {
+                console.error("Live process error:", e);
             }
 
-            updateLiveStats(data);
-
-            if (data.face_box) {
-                drawLiveOverlay(data);
-                webcamStatus.textContent = data.matched ? `Correspondance: ${data.identity}` : 'Visage détecté - Recherche...';
-            } else {
-                const ctx = webcamCanvas.getContext('2d');
-                ctx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
-                webcamStatus.textContent = 'Aucun visage détecté';
+            // Schedule next frame
+            if (isLiveProcessing) {
+                setTimeout(processLiveFrame, 800); // ~1.2 FPS is enough for demo
             }
-        } catch (error) {
-            console.error('Live Recognition Error:', error);
-            webcamStatus.textContent = 'Erreur de connexion';
-        }
+        }, 'image/jpeg', 0.6);
     }
 
-    function updateLiveStats(data) {
-        if (data.identity) {
-            liveIdentity.textContent = data.identity;
-            liveSimilarity.textContent = `${(data.similarity * 100).toFixed(1)}%`;
-            
-            // Highlight color based on match
-            liveIdentity.style.color = data.matched ? '#059669' : '#2563eb';
-        } else {
-            liveIdentity.textContent = '-';
-            liveSimilarity.textContent = '0%';
-        }
-    }
-
-    function drawLiveOverlay(data) {
+    function drawLiveHUD(box, identity, matched, similarity) {
         const ctx = webcamCanvas.getContext('2d');
-        
-        // Match canvas size to display size
-        const displayWidth = webcamVideo.clientWidth;
-        const displayHeight = webcamVideo.clientHeight;
-        
-        if (webcamCanvas.width !== displayWidth || webcamCanvas.height !== displayHeight) {
-            webcamCanvas.width = displayWidth;
-            webcamCanvas.height = displayHeight;
-        }
-        
+        webcamCanvas.width = webcamVideo.clientWidth;
+        webcamCanvas.height = webcamVideo.clientHeight;
         ctx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
-        
-        if (!data.face_box) return;
 
-        const box = data.face_box;
         const scaleX = webcamCanvas.width / box.img_w;
         const scaleY = webcamCanvas.height / box.img_h;
-
         const x = box.x * scaleX;
         const y = box.y * scaleY;
         const w = box.w * scaleX;
         const h = box.h * scaleY;
 
-        const isMatch = data.matched;
-        const color = isMatch ? '#059669' : '#2563eb'; 
+        const liveThreshold = 0.70;
+        const isMatched = matched && (similarity >= liveThreshold);
+        
+        const color = isMatched ? '#00ffff' : '#ff3b3b';
+        const shadow = isMatched ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 59, 59, 0.5)';
 
-        // Draw Bounding Box
+        // Draw Target Box
         ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
-        ctx.lineJoin = "round";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 5]);
         ctx.strokeRect(x, y, w, h);
+        ctx.setLineDash([]);
 
-        // Label Background
-        const label = isMatch ? `${data.identity} (${(data.similarity * 100).toFixed(0)}%)` : 'DÉTECTION...';
-        ctx.font = '700 14px Inter';
-        const textMetrics = ctx.measureText(label);
-        const textWidth = textMetrics.width;
-        
+        // Draw Label
         ctx.fillStyle = color;
-        ctx.fillRect(x - 2, y - 35, textWidth + 24, 35);
-        
-        ctx.fillStyle = 'white';
-        ctx.fillText(label, x + 10, y - 12);
-        
-        // Pulse Effect for match
-        if (isMatch) {
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = color;
-            ctx.strokeRect(x, y, w, h);
-            ctx.shadowBlur = 0;
+        ctx.font = 'bold 14px "Courier New"';
+        const label = isMatched ? `${identity.toUpperCase()} [${(similarity*100).toFixed(1)}%]` : "ID_UNKNOWN";
+        ctx.fillText(label, x, y - 10);
+
+        // Cyberpunk brackets
+        ctx.lineWidth = 4;
+        const bLen = 20;
+        ctx.beginPath();
+        // TL
+        ctx.moveTo(x, y + bLen); ctx.lineTo(x, y); ctx.lineTo(x + bLen, y);
+        // TR
+        ctx.moveTo(x + w - bLen, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + bLen);
+        // BL
+        ctx.moveTo(x, y + h - bLen); ctx.lineTo(x, y + h); ctx.lineTo(x + bLen, y + h);
+        // BR
+        ctx.moveTo(x + w - bLen, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - bLen);
+        ctx.stroke();
+    }
+
+    async function loadDashboard() {
+        try {
+            const response = await fetch('/api/stats');
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            statIdentities.textContent = data.identities;
+            statVis.textContent = data.vis_images;
+            statNir.textContent = data.nir_images;
+            statDevice.textContent = data.device;
+        } catch (error) {
+            console.error('Error loading dashboard:', error);
+        }
+    }
+
+    async function loadGallery() {
+        try {
+            galleryGrid.innerHTML = '<div class="loading-gallery">Chargement de la base de données...</div>';
+            const response = await fetch('/api/gallery');
+            const data = await response.json();
+
+            galleryGrid.innerHTML = '';
+            if (data.gallery.length === 0) {
+                galleryGrid.innerHTML = '<div class="loading-gallery">Aucune identité trouvée dans la base de données.</div>';
+                return;
+            }
+            data.gallery.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'gallery-item';
+                card.innerHTML = `
+                    <img src="${item.image_url}" alt="${item.identity}">
+                    <div class="info"><span class="name">${item.identity}</span></div>
+                `;
+                galleryGrid.appendChild(card);
+            });
+        } catch (error) {
+            console.error('Error loading gallery:', error);
+            galleryGrid.innerHTML = '<div class="loading-gallery">Erreur lors du chargement de la galerie.</div>';
         }
     }
 
@@ -318,7 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/identities');
             const data = await response.json();
-            
             identityList.innerHTML = '';
             if (data.identities.length === 0) {
                 identityList.innerHTML = '<span class="identity-badge">La galerie est vide</span>';
@@ -335,11 +283,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Handle Upload Clicks
+    // Upload clicks
     visUpload.addEventListener('click', () => visInput.click());
     nirUpload.addEventListener('click', () => nirInput.click());
 
-    // Handle File Selection
     visInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -364,6 +311,13 @@ document.addEventListener('DOMContentLoaded', () => {
             previewImg.src = e.target.result;
             previewImg.hidden = false;
             placeholder.style.opacity = '0';
+            
+            // Clear and hide face canvas on new upload
+            if (faceCanvas) {
+                faceCanvas.hidden = true;
+                const ctx = faceCanvas.getContext('2d');
+                ctx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+            }
         };
         reader.readAsDataURL(file);
     }
@@ -376,7 +330,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Action Button Handler
     verifyBtn.addEventListener('click', async () => {
         if (currentMode === 'verify') {
             await performVerification();
@@ -387,7 +340,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function performVerification() {
         if (!visFile || !nirFile) return;
-
         setLoading(true, 'ANALYSE EN COURS...');
         resultContainer.hidden = true;
 
@@ -396,10 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('nir_image', nirFile);
 
         try {
-            const response = await fetch('/api/compare', {
-                method: 'POST',
-                body: formData
-            });
+            const response = await fetch('/api/compare', { method: 'POST', body: formData });
             const data = await response.json();
             if (data.error) alert('Erreur : ' + data.error);
             else displayResult(data);
@@ -413,7 +362,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function performRecognition() {
         if (!nirFile) return;
-
         setLoading(true, 'RECONNAISSANCE EN COURS...');
         resultContainer.hidden = true;
 
@@ -421,21 +369,15 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('image', nirFile);
 
         try {
-            const response = await fetch('/api/recognize', {
-                method: 'POST',
-                body: formData
-            });
+            const response = await fetch('/api/recognize', { method: 'POST', body: formData });
             const data = await response.json();
-            
             if (data.error) {
                 alert('Erreur: ' + data.error);
             } else if (data.message === 'Gallery is empty') {
                 alert('La galerie est vide. Veuillez ajouter des images dans le dossier gallery/.');
             } else {
                 displayRecognitionResult(data);
-                if (data.face_box) {
-                    drawFaceHighlight(data.face_box);
-                }
+                if (data.face_box) drawFaceHighlight(data.face_box);
             }
         } catch (error) {
             console.error('Fetch error:', error);
@@ -447,23 +389,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawFaceHighlight(box) {
         const ctx = faceCanvas.getContext('2d');
-        const img = nirPreview;
-        
-        // Match canvas size to displayed image size
-        faceCanvas.width = img.clientWidth;
-        faceCanvas.height = img.clientHeight;
+        faceCanvas.width = nirPreview.clientWidth;
+        faceCanvas.height = nirPreview.clientHeight;
         faceCanvas.hidden = false;
 
         const scaleX = faceCanvas.width / box.img_w;
         const scaleY = faceCanvas.height / box.img_h;
-
         const centerX = (box.x + box.w / 2) * scaleX;
         const centerY = (box.y + box.h / 2) * scaleY;
         const radius = (Math.max(box.w, box.h) / 2) * Math.min(scaleX, scaleY) * 1.2;
 
         ctx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
-        
-        // Draw Glow/Circle
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
         ctx.strokeStyle = '#2563eb';
@@ -471,8 +407,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.shadowBlur = 15;
         ctx.shadowColor = '#2563eb';
         ctx.stroke();
-
-        // Optional: pulsed effect if we wanted to animate here
     }
 
     function setLoading(isLoading, text) {
@@ -484,99 +418,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayResult(data) {
         resultContainer.hidden = false;
+        resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
         resultContainer.classList.remove('match', 'mismatch');
-        
+
         const simPercent = (data.similarity * 100).toFixed(2);
-        
+
         if (data.match) {
             resultContainer.classList.add('match');
             resultStatus.textContent = 'IDENTITÉ CORRESPONDANTE';
-            resultMessage.textContent = `Correspondance Spectrale de haute confiance. La sonde NIR correspond à l'identité de référence VIS.`;
-            
-            if (data.heatmap) {
-                addXAIButton(data.heatmap);
-            }
+            resultMessage.textContent = '';
+            if (data.heatmap) showXAI(data.face_crop, data.heatmap);
         } else {
             resultContainer.classList.add('mismatch');
             resultStatus.textContent = 'IDENTITÉ NON CORRESPONDANTE';
             resultMessage.textContent = `Faible similarité détectée. Il semble s'agir de personnes différentes.`;
-            removeXAIButton();
+            xaiSection.hidden = true;
         }
-
         updateSimilarityBar(simPercent);
     }
 
-
     function displayRecognitionResult(data) {
         resultContainer.hidden = false;
+        resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
         resultContainer.classList.remove('match', 'mismatch');
-        
+
         const simPercent = (data.similarity * 100).toFixed(2);
-        
+
         if (data.matched) {
             resultContainer.classList.add('match');
             resultStatus.textContent = `RECONNU : ${data.identity}`;
             resultMessage.textContent = `La meilleure correspondance trouvée dans la galerie pour ${data.identity} avec ${simPercent}% de confiance.`;
-            
-            if (data.heatmap) {
-                addXAIButton(data.heatmap);
-            }
+            if (data.heatmap) showXAI(data.face_crop, data.heatmap);
         } else {
             resultContainer.classList.add('mismatch');
             resultStatus.textContent = 'IDENTITÉ INCONNUE';
             resultMessage.textContent = `Aucune correspondance fiable trouvée dans la galerie. La meilleure était ${data.identity} avec une faible confiance (${simPercent}%).`;
-            removeXAIButton();
+            xaiSection.hidden = true;
         }
-
         updateSimilarityBar(simPercent);
     }
 
-    function addXAIButton(heatmapB64) {
-        removeXAIButton(); // Clear existing
-        const btn = document.createElement('button');
-        btn.id = 'btn-show-xai';
-        btn.className = 'btn-insight';
-        btn.innerHTML = '🔍 POURQUOI CELA A-T-IL CORRESPOND ? (APERÇUS IA)';
-        btn.addEventListener('click', () => {
-            xaiOriginal.src = nirPreview.src;
-            xaiHeatmap.src = `data:image/jpeg;base64,${heatmapB64}`;
-            insightsPanel.hidden = false;
-            insightsPanel.scrollIntoView({ behavior: 'smooth' });
-        });
-        resultContainer.appendChild(btn);
+    function showXAI(faceCropB64, heatmapB64) {
+        xaiOriginal.src = faceCropB64
+            ? `data:image/jpeg;base64,${faceCropB64}`
+            : nirPreview.src;
+        xaiHeatmap.src = `data:image/jpeg;base64,${heatmapB64}`;
+        xaiSection.hidden = false;
     }
-
-    function removeXAIButton() {
-        const existing = document.getElementById('btn-show-xai');
-        if (existing) existing.remove();
-        insightsPanel.hidden = true;
-    }
-
-    closeInsights.addEventListener('click', () => {
-        insightsPanel.hidden = true;
-    });
-
 
     function updateSimilarityBar(percent) {
         similarityValue.textContent = `${percent}%`;
         const displayWidth = Math.max(0, Math.min(100, percent));
         similarityFill.style.width = '0%';
-        setTimeout(() => {
-            similarityFill.style.width = `${displayWidth}%`;
-        }, 50);
+        setTimeout(() => { similarityFill.style.width = `${displayWidth}%`; }, 50);
     }
 
-    // Drag and Drop Support
+    // Drag and Drop
     [visUpload, nirUpload].forEach((area, index) => {
         area.addEventListener('dragover', (e) => {
             e.preventDefault();
             area.style.borderColor = 'var(--primary)';
         });
-
         area.addEventListener('dragleave', () => {
             area.style.borderColor = 'var(--glass-border)';
         });
-
         area.addEventListener('drop', (e) => {
             e.preventDefault();
             area.style.borderColor = 'var(--glass-border)';

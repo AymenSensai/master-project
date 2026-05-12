@@ -73,7 +73,7 @@ def main(config_path: str, resume: bool = False):
     # 2. Model
     model = build_model(
         embedding_dim=512, 
-        pretrained=True, 
+        pretrained=(not resume), 
         num_classes=num_classes
     )
     model = model.to(device)

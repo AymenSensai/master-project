@@ -1,8 +1,13 @@
 import os
+import io
+import cv2
 import torch
 from PIL import Image
 import numpy as np
 from typing import List, Dict, Tuple
+
+from utils import detect_and_crop_face
+
 
 class GalleryManager:
     def __init__(self, model, preprocess_fn, device, gallery_dir='gallery'):
@@ -31,26 +36,56 @@ class GalleryManager:
         
         for identity in identities:
             id_path = os.path.join(self.gallery_dir, identity)
-            for img_name in os.listdir(id_path):
-                if img_name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
-                    img_path = os.path.join(id_path, img_name)
-                    try:
-                        with open(img_path, 'rb') as f:
-                            img_bytes = f.read()
+            images = sorted([f for f in os.listdir(id_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))])
+
+            if not images:
+                continue
+
+            embed_list = []
+            for img_name in images:
+                img_path = os.path.join(id_path, img_name)
+                try:
+                    img_bgr = cv2.imread(img_path)
+                    if img_bgr is None:
+                        continue
                         
-                        tensor = self.preprocess_fn(img_bytes)
-                        with torch.no_grad():
-                            embedding = self.model(tensor).cpu().numpy()[0]
-                        
-                        self.embeddings.append({
-                            'embedding': embedding,
-                            'identity': identity,
-                            'path': img_path
-                        })
-                    except Exception as e:
-                        print(f"Error processing {img_path}: {e}")
-        
-        print(f"Gallery refreshed: {len(self.embeddings)} images loaded.")
+                    face_img, _ = detect_and_crop_face(img_bgr, padding=0.15)
+                    
+                    # Convert BGR to RGB for PIL/Torch
+                    face_rgb = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+                    face_pil = Image.fromarray(face_rgb)
+                    
+                    # Reuse the same preprocess logic as app.py
+                    # (Assuming self.preprocess_fn expects bytes, I'll update it to handle PIL or modify app.py)
+                    # Actually, app.py's preprocess_image expects bytes.
+                    # Let's just use the tensor logic directly here to be safe.
+                    
+                    # Wait, let's keep it simple. If we have face_img, we can encode it back to bytes.
+                    _, buf = cv2.imencode('.jpg', face_img)
+                    tensor = self.preprocess_fn(buf.tobytes())
+                    
+                    with torch.no_grad():
+                        emb = self.model(tensor).cpu().numpy()[0]
+                    embed_list.append(emb)
+                except Exception as e:
+                    print(f"Error processing {img_path}: {e}")
+
+            if not embed_list:
+                continue
+
+            # Average all embeddings and re-normalize to unit sphere
+            mean_emb = np.mean(embed_list, axis=0)
+            norm = np.linalg.norm(mean_emb)
+            if norm > 0:
+                mean_emb /= norm
+
+            self.embeddings.append({
+                'embedding': mean_emb,
+                'identity': identity,
+                'path': os.path.join(id_path, images[0])  # first image for UI display
+            })
+
+        print(f"Gallery refreshed: {len(self.embeddings)} identities loaded (mean embeddings).")
 
     def search(self, probe_embedding: np.ndarray, top_k: int = 5) -> List[Dict]:
         """
@@ -66,7 +101,8 @@ class GalleryManager:
             results.append({
                 'identity': item['identity'],
                 'similarity': float(similarity),
-                'path': item['path']
+                'path': item['path'],
+                'embedding': item['embedding']
             })
         
         # Sort by similarity descending

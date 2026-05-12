@@ -1,18 +1,19 @@
 import os
 import io
+import base64
 import torch
 import torch.nn as nn
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from PIL import Image
 import torchvision.transforms as transforms
 import numpy as np
-
 import cv2
 
 from model import build_model
 from gallery_manager import GalleryManager
 from xai_utils import get_base64_heatmap
+from utils import load_config, detect_and_crop_face
 
 import logging
 
@@ -24,9 +25,12 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration
+config = load_config('config.yaml')
 CHECKPOINT_PATH = 'checkpoints/model_best.pth'
-IMG_SIZE = 112
+IMG_SIZE = config['dataset']['img_size']
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DATA_ROOT = config['dataset']['root_dir']
+VIS_GALLERY_PATH = os.path.join(DATA_ROOT, 'VIS')
 
 # Initialize Haar Cascade for Face Detection
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -70,12 +74,35 @@ def preprocess_image(image_bytes):
     image = transform(image).unsqueeze(0).to(DEVICE)
     return image
 
+
 # Initialize Gallery
-gallery = GalleryManager(model, preprocess_image, DEVICE)
+gallery = GalleryManager(model, preprocess_image, DEVICE, gallery_dir=VIS_GALLERY_PATH)
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/logo.png')
+def get_logo():
+    return send_from_directory('/Users/mac/.gemini/antigravity/brain/3015868c-c70f-43e2-900e-a4f9f8de695c', 'spectralface_icon_logo_1778523183111.png')
+
+@app.route('/data/<path:filename>')
+def serve_data(filename):
+    return send_from_directory(DATA_ROOT, filename)
+
+@app.route('/api/gallery', methods=['GET'])
+def get_gallery():
+    # Construct relative paths for the frontend
+    gallery_items = []
+    for item in gallery.embeddings:
+        # item['path'] is absolute or relative to project root
+        # We need a path relative to DATA_ROOT to use with /data/ route
+        rel_path = os.path.relpath(item['path'], DATA_ROOT)
+        gallery_items.append({
+            'identity': item['identity'],
+            'image_url': f'/data/{rel_path}'
+        })
+    return jsonify({'gallery': gallery_items})
 
 @app.route('/api/compare', methods=['POST'])
 def compare():
@@ -101,21 +128,25 @@ def compare():
         threshold = 0.50 
         match = similarity > threshold
         
-        # Generate XAI heatmap for the NIR image
-        heatmap_b64 = None
+        face_crop_b64 = None
+        heatmap_b64   = None
         if match:
-            # We use layer4 as target
-            target_layer = model.features[7]
-            nparr = np.frombuffer(nir_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            if img is not None:
-                heatmap_b64 = get_base64_heatmap(img, model, target_layer, transform, DEVICE)
+            nparr   = np.frombuffer(nir_data, np.uint8)
+            nir_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if nir_img is not None:
+                face_img, _ = detect_and_crop_face(nir_img)
+                gallery_embed = vis_embed.cpu().numpy()[0]
+                heatmap_b64, face_crop_b64 = get_base64_heatmap(
+                    face_img, model, transform, DEVICE, gallery_embed
+                )
 
         return jsonify({
             'similarity': round(similarity, 4),
             'match': bool(match),
             'threshold': threshold,
-            'heatmap': heatmap_b64
+            'face_crop': face_crop_b64,
+            'heatmap':   heatmap_b64,
+            'gallery_image_url': f'/data/{os.path.relpath(vis_file.filename, DATA_ROOT)}' if match else None
         })
         
     except Exception as e:
@@ -130,63 +161,65 @@ def recognize():
     img_bytes = file.read()
     
     try:
-        # 1. Face Detection (Haar Cascade)
+        # 1. Face Detection (Unified)
         nparr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
-            app.logger.error("Recognize: Failed to decode image")
             return jsonify({'error': 'Image invalide'}), 400
             
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        face_img, face_box = detect_and_crop_face(img, padding=0.15)
+        face_detected = face_box is not None
         
-        # Sensitive detection for webcam
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(40, 40))
-        
-        face_box = None
-        face_img = None if img is None else img.copy() # Default to full image
-        
-        if len(faces) > 0:
-            faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
-            x, y, w, h = faces[0]
-            face_img = img[y:y+h, x:x+w]
-            face_box = {
-                'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h),
-                'img_w': int(img.shape[1]), 'img_h': int(img.shape[0])
-            }
-            app.logger.info(f"Recognize: Face detected at [{x}, {y}]")
+        face_crop_b64 = None
+        if face_detected:
+            _, buf = cv2.imencode('.jpg', face_img)
+            face_crop_b64 = base64.b64encode(buf).decode('utf-8')
+            app.logger.info(f"Recognize: Face detected at [{face_box['x']}, {face_box['y']}]")
         else:
-            app.logger.info("Recognize: No face detected")
+            app.logger.info("Recognize: No face detected, using full frame")
 
-        # 2. Recognition Logic
-        # Preprocess the original image for recognition if needed, 
-        # or use the face crop if detected for better accuracy.
-        img_to_process = face_img if face_img is not None else img
-
-        tensor = preprocess_image(img_bytes) # This uses the full image from bytes
+        # Embed the face crop when available — the full frame includes
+        # background, hands, phone borders which hurt matching accuracy.
+        face_rgb = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+        tensor = transform(Image.fromarray(face_rgb)).unsqueeze(0).to(DEVICE)
         with torch.no_grad():
             probe_embed = model(tensor).cpu().numpy()[0]
-            
+
         results = gallery.search(probe_embed, top_k=1)
-        heatmap_b64 = None
 
         if results:
             best_match = results[0]
-            threshold = 0.50
+            threshold = 0.70
+            app.logger.info(f"DEBUG: Current recognition threshold is {threshold}")
             similarity = float(best_match['similarity'])
-            matched = similarity > threshold
-            
-            if matched:
-                app.logger.info(f"Recognize: Match! {best_match['identity']} ({similarity:.2f})")
-                # Generate XAI Heatmap for the detected face OR full image
-                target_layer = model.features[7]
-                heatmap_b64 = get_base64_heatmap(img_to_process, model, target_layer, transform, DEVICE)
+            matched = similarity >= threshold
+            face_detected = face_box is not None
+
+            app.logger.info(
+                f"Recognize: {'Match' if matched else 'No match'} – "
+                f"{best_match['identity']} ({similarity:.3f}) face={face_detected}"
+            )
+
+            heatmap_b64 = None
+            xai_crop_b64 = None
+            if matched and face_detected:
+                heatmap_b64, xai_crop_b64 = get_base64_heatmap(
+                    face_img, model, transform, DEVICE, best_match['embedding']
+                )
+
+            # Construction of gallery image URL
+            rel_gallery_path = os.path.relpath(best_match['path'], DATA_ROOT)
+            gallery_url = f'/data/{rel_gallery_path}'
 
             return jsonify({
                 'matched': matched,
+                'face_detected': face_detected,
                 'identity': best_match['identity'],
                 'similarity': round(float(similarity), 4),
                 'face_box': face_box,
-                'heatmap': heatmap_b64
+                'face_crop': xai_crop_b64 or face_crop_b64,
+                'heatmap':   heatmap_b64,
+                'gallery_image_url': gallery_url
             })
 
         
@@ -199,67 +232,30 @@ def get_identities():
     identities = gallery.get_identities()
     return jsonify({'identities': sorted(identities)})
 
-def get_metrics_from_log(log_path='cross_spectral_eval.log'):
-    precision = "98.4%"
-    accuracy = "96.2%"
-    try:
-        import re
-        with open(log_path, 'r') as f:
-            content = f.read()
-            # Model precision mapped to TAR @ FAR=0.01
-            tar_match = re.findall(r'TAR @ FAR=0.01: ([\d.]+)%', content)
-            if tar_match:
-                precision = tar_match[-1] + "%"
-            
-            # Cross-spectral accuracy mapped to Rank-1 Accuracy
-            acc_match = re.findall(r'Rank-1 Accuracy: ([\d.]+)%', content)
-            if acc_match:
-                accuracy = acc_match[-1] + "%"
-    except Exception as e:
-        app.logger.warning(f"Could not read metrics from log: {e}")
-    
-    return precision, accuracy
-
-@app.route('/api/analytics', methods=['GET'])
-def get_analytics():
-    identities = gallery.get_identities()
-    
-    # Demographic mapping for the demo
-    total = len(identities)
-    
-    # Simple heuristic based on the names we assigned
-    asian_names = ['Wei', 'Li', 'Hao', 'Mei', 'Min-Jun', 'Xiao', 'Zhi', 'Yuki', 'Hiroshi', 'Kenji', 'Sun-Hee', 'Sato', 'Tanaka', 'Chen', 'Park']
-    female_names = ['Alice', 'Chloe', 'Elena', 'Katherine', 'Mei', 'Sarah', 'Sun-Hee', 'Tasha', 'Xiao', 'Sarah', 'Priya']
-    
-    asian_count = sum(1 for name in identities if any(an in name for an in asian_names))
-    female_count = sum(1 for name in identities if any(fn in name for fn in female_names))
-    male_count = total - female_count
-    
-    precision, accuracy = get_metrics_from_log()
-    
-    return jsonify({
-        'total_identities': total,
-        'model_precision': precision,
-        'cross_spectral_accuracy': accuracy,
-        'gender_distribution': {
-            'Male': male_count,
-            'Female': female_count
-        },
-        'ethnicity_distribution': {
-            'Asian': asian_count,
-            'Other': total - asian_count
-        },
-        'system_activity': [
-            {'date': '2026-03-21', 'count': 45},
-            {'date': '2026-03-22', 'count': 120},
-            {'date': '2026-03-23', 'count': 89}
-        ]
-    })
-
 @app.route('/api/refresh_gallery', methods=['POST'])
 def refresh_gallery():
     gallery.refresh_gallery()
     return jsonify({'status': 'success', 'count': len(gallery.embeddings)})
+
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    try:
+        vis_root = os.path.join(DATA_ROOT, 'VIS')
+        nir_root = os.path.join(DATA_ROOT, 'NIR')
+        
+        vis_count = sum([len(files) for r, d, files in os.walk(vis_root) if files])
+        nir_count = sum([len(files) for r, d, files in os.walk(nir_root) if files])
+        identities_count = len(gallery.get_identities())
+        
+        return jsonify({
+            'identities': identities_count,
+            'vis_images': vis_count,
+            'nir_images': nir_count,
+            'device': str(DEVICE).upper(),
+            'status': 'Online'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
