@@ -4,11 +4,54 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 import time
+import numpy as np
 
-from utils import load_config, setup_logger, save_checkpoint, set_seed
+from utils import load_config, setup_logger, save_checkpoint, set_seed, compute_tar_at_far
 from dataset import get_dataloader
 from model import build_model
 from losses import CrossSpectralLoss
+
+@torch.no_grad()
+def evaluate_epoch(model, dataloader, device, far_targets, logger, epoch, best_rank1):
+    model.eval()
+    all_embeds, all_labels, all_domains = [], [], []
+
+    for images, labels, domains in dataloader:
+        embeds = model(images.to(device), domain=domains.to(device))
+        all_embeds.append(embeds.cpu().numpy())
+        all_labels.extend(labels.numpy())
+        all_domains.extend(domains.numpy())
+
+    all_embeds = np.vstack(all_embeds)
+    all_labels = np.array(all_labels)
+    all_domains = np.array(all_domains)
+
+    vis_mask = all_domains == 0
+    nir_mask = all_domains == 1
+    vis_embeds, vis_labels = all_embeds[vis_mask], all_labels[vis_mask]
+    nir_embeds, nir_labels = all_embeds[nir_mask], all_labels[nir_mask]
+
+    if len(vis_embeds) == 0 or len(nir_embeds) == 0:
+        logger.warning(f"Epoch [{epoch}] Eval skipped: missing VIS or NIR samples.")
+        return 0.0, False
+
+    sim_matrix = np.dot(nir_embeds, vis_embeds.T)
+    rank1_acc = np.sum(vis_labels[np.argmax(sim_matrix, axis=1)] == nir_labels) / len(nir_labels)
+
+    pair_scores = sim_matrix.flatten()
+    nir_exp = np.repeat(nir_labels[:, None], len(vis_labels), axis=1)
+    vis_exp = np.repeat(vis_labels[None, :], len(nir_labels), axis=0)
+    pair_labels = (nir_exp == vis_exp).astype(int).flatten()
+
+    tar_str = "  ".join(
+        f"TAR@FAR={f}: {compute_tar_at_far(pair_scores, pair_labels, f)*100:.2f}%"
+        for f in far_targets
+    )
+    is_best = rank1_acc > best_rank1
+    flag = " <-- BEST" if is_best else ""
+    logger.info(f"Epoch [{epoch}] Eval -- Rank-1: {rank1_acc*100:.2f}%  {tar_str}{flag}")
+    return rank1_acc, is_best
+
 
 def train_epoch(model, dataloader, criterion, optimizer, device, epoch, logger):
     model.train()
@@ -59,15 +102,24 @@ def main(config_path: str, resume: bool = False):
     logger.info(f"Starting training on {device}")
     
     # 1. Dataset
+    crop_faces = config['dataset'].get('crop_faces', True)
     train_loader = get_dataloader(
         root_dir=config['dataset']['root_dir'],
         split='train',
         batch_size=config['train']['batch_size'],
         img_size=config['dataset']['img_size'],
         num_workers=config['dataset']['num_workers'],
-        crop_faces=config['dataset'].get('crop_faces', True),
+        crop_faces=crop_faces,
     )
-    
+    val_loader = get_dataloader(
+        root_dir=config['dataset']['root_dir'],
+        split='test',
+        batch_size=config['eval']['batch_size'],
+        img_size=config['dataset']['img_size'],
+        num_workers=config['dataset']['num_workers'],
+        crop_faces=crop_faces,
+    )
+
     num_classes = len(train_loader.dataset.label_to_idx)
     logger.info(f"Training on {num_classes} identities.")
     
@@ -103,6 +155,7 @@ def main(config_path: str, resume: bool = False):
     
     start_epoch = 1
     best_loss = float('inf')
+    best_rank1 = 0.0
 
     # Resume logic
     checkpoint_path = os.path.join(save_dir, "model_best.pth")
@@ -120,25 +173,27 @@ def main(config_path: str, resume: bool = False):
         
         start_epoch = checkpoint['epoch'] + 1
         best_loss = checkpoint.get('loss', float('inf'))
+        best_rank1 = checkpoint.get('rank1', 0.0)
         logger.info(f"Resuming from epoch {start_epoch}")
     
     # 4. Training Loop
+    far_targets = config['eval']['far_targets']
     epochs = config['train']['epochs']
     for epoch in range(start_epoch, epochs + 1):
         loss = train_epoch(model, train_loader, criterion, optimizer, device, epoch, logger)
         scheduler.step()
-        
-        # Save Checkpoint
-        is_best = loss < best_loss
+
+        rank1, is_best = evaluate_epoch(model, val_loader, device, far_targets, logger, epoch, best_rank1)
         if is_best:
-            best_loss = loss
-            
+            best_rank1 = rank1
+
         save_checkpoint({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'loss': loss,
+            'rank1': rank1,
             'num_classes': num_classes
         }, is_best, save_dir, filename=f"checkpoint_epoch_{epoch}.pth")
 
