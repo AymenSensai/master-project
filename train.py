@@ -18,31 +18,28 @@ def train_epoch(model, dataloader, criterion, optimizer, device, epoch, logger):
     
     start_time = time.time()
     
+    logger.info(f"Epoch [{epoch}] starting — {len(dataloader)} batches total.")
     for i, (images, labels, domains) in enumerate(dataloader):
+        logger.info(f"Epoch [{epoch}] batch {i+1} loaded, running forward pass...")
         images = images.to(device)
         labels = labels.to(device)
         domains = domains.to(device)
-        
+
         optimizer.zero_grad()
-        
-        # Forward pass
+
         embeds, logits = model(images, domain=domains)
-        
-        # Losses
         loss, loss_ce, loss_triplet = criterion(embeds, logits, labels)
-        
-        # Backward and optimize
+
         loss.backward()
         optimizer.step()
-        
+
         running_loss += loss.item()
         running_ce += loss_ce.item()
         running_triplet += loss_triplet.item()
-        
-        if (i + 1) % 10 == 0:
-            logger.info(f"Epoch [{epoch}], Step [{i+1}/{len(dataloader)}], "
-                        f"Loss: {loss.item():.4f} "
-                        f"(CE: {loss_ce.item():.4f}, Triplet: {loss_triplet.item():.4f})")
+
+        logger.info(f"Epoch [{epoch}], Step [{i+1}/{len(dataloader)}], "
+                    f"Loss: {loss.item():.4f} "
+                    f"(CE: {loss_ce.item():.4f}, Triplet: {loss_triplet.item():.4f})")
                         
     epoch_loss = running_loss / len(dataloader)
     epoch_time = time.time() - start_time
@@ -71,31 +68,36 @@ def main(config_path: str, resume: bool = False):
     logger.info(f"Training on {num_classes} identities.")
     
     # 2. Model
+    logger.info("Building model...")
     model = build_model(
-        embedding_dim=512, 
-        pretrained=(not resume), 
+        embedding_dim=512,
+        pretrained=(not resume),
         num_classes=num_classes
     )
+    logger.info("Moving model to device...")
     model = model.to(device)
-    
+    logger.info("Model ready.")
+
     # 3. Loss & Optimizer
+    logger.info("Setting up loss, optimizer, scheduler...")
     criterion = CrossSpectralLoss(
         margin=config['train']['margin'],
         lambda_softmax=config['train']['lambda_softmax'],
         lambda_triplet=config['train']['lambda_triplet']
     ).to(device)
-    
+
     optimizer = optim.Adam(
-        model.parameters(), 
-        lr=config['train']['learning_rate'], 
+        model.parameters(),
+        lr=config['train']['learning_rate'],
         weight_decay=config['train']['weight_decay']
     )
-    
+
     scheduler = StepLR(
-        optimizer, 
-        step_size=config['train']['step_size'], 
+        optimizer,
+        step_size=config['train']['step_size'],
         gamma=config['train']['gamma']
     )
+    logger.info("Setup complete. Starting training loop...")
     
     save_dir = config['train']['save_dir']
     os.makedirs(save_dir, exist_ok=True)
