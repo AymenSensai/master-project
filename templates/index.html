@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpectralFace | Vérification d'Identité Spectrale</title>
+    <title>SpectralFace | Identification d'Identité Spectrale</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.png') }}">
     <link
@@ -23,12 +23,12 @@
             <p class="subtitle">Système Avancé de Reconnaissance Faciale Spectrale</p>
 
             <div class="mode-toggle">
-                <button class="mode-btn active" id="mode-verify">VÉRIFICATION</button>
+                <button class="mode-btn active" id="mode-dashboard">TABLEAU DE BORD</button>
+                <button class="mode-btn" id="mode-verify">IDENTIFICATION</button>
                 <button class="mode-btn" id="mode-recognize">RECONNAISSANCE</button>
                 <button class="mode-btn" id="mode-live">LIVE HUD</button>
                 <button class="mode-btn" id="mode-challenge">DÉFI IA</button>
                 <button class="mode-btn" id="mode-gallery">GALERIE</button>
-                <button class="mode-btn" id="mode-dashboard">TABLEAU DE BORD</button>
             </div>
         </header>
 
@@ -74,7 +74,7 @@
 
                 <div class="action-section">
                     <button id="verify-btn" class="btn-verify" disabled>
-                        <span class="btn-text">VÉRIFIER L'IDENTITÉ</span>
+                        <span class="btn-text">IDENTIFIER L'IDENTITÉ</span>
                         <span class="loader" hidden></span>
                     </button>
                 </div>

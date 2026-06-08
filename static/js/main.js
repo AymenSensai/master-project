@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let visFile = null;
     let nirFile = null;
-    let currentMode = 'verify';
+    let currentMode = 'dashboard';
     let webcamStream = null;
     let isLiveProcessing = false;
     let scoreBuffer = [];
@@ -63,6 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     startWebcamBtn.addEventListener('click', startWebcam);
     stopWebcamBtn.addEventListener('click', stopWebcam);
+
+    switchMode('dashboard');
 
     function switchMode(mode) {
         currentMode = mode;
@@ -95,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const resultsContainer = document.getElementById('results-container');
 
         const hideMain = mode === 'gallery' || mode === 'dashboard' || mode === 'live' || mode === 'challenge';
-        btnText.textContent = hideMain ? '' : (mode === 'verify' ? 'VÉRIFIER L\'IDENTITÉ' : 'RECONNAÎTRE LE VISAGE');
+        btnText.textContent = hideMain ? '' : (mode === 'verify' ? 'IDENTIFIER L\'IDENTITÉ' : 'RECONNAÎTRE LE VISAGE');
 
         if (comparisonGrid) comparisonGrid.style.display = hideMain ? 'none' : '';
         if (actionSection) actionSection.style.display = hideMain ? 'none' : '';
@@ -157,9 +159,15 @@ document.addEventListener('DOMContentLoaded', () => {
     async function processLiveFrame() {
         if (!isLiveProcessing || currentMode !== 'live') return;
 
+        // Wait until the video has actual frames — avoids sending a blank image on startup
+        if (webcamVideo.readyState < 2) {
+            setTimeout(processLiveFrame, 200);
+            return;
+        }
+
         const startTime = Date.now();
         const canvas = document.createElement('canvas');
-        canvas.width = 640; // Smaller for speed
+        canvas.width = 640;
         canvas.height = 360;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(webcamVideo, 0, 0, canvas.width, canvas.height);
@@ -194,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isLiveProcessing) {
                 setTimeout(processLiveFrame, 800); // ~1.2 FPS is enough for demo
             }
-        }, 'image/jpeg', 0.6);
+        }, 'image/jpeg', 0.85);
     }
 
     function drawLiveHUD(box, identity, matched, similarity) {
@@ -376,9 +384,9 @@ document.addEventListener('DOMContentLoaded', () => {
             else displayResult(data);
         } catch (error) {
             console.error('Fetch error:', error);
-            alert('Une erreur s\'est produite lors de la vérification.');
+            alert('Une erreur s\'est produite lors de l\'identification.');
         } finally {
-            setLoading(false, 'VÉRIFIER L\'IDENTITÉ');
+            setLoading(false, 'IDENTIFIER L\'IDENTITÉ');
         }
     }
 

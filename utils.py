@@ -64,11 +64,13 @@ def detect_and_crop_face(img_bgr: np.ndarray, padding: float = 0.15) -> Tuple[np
         return None, None
         
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    # Equalise histogram so detection is robust to dark/bright webcam conditions
+    gray = cv2.equalizeHist(gray)
     ih, iw = img_bgr.shape[:2]
-    
-    # Progressive detection for robustness
+
+    # Progressive detection — loosens constraints until a face is found
     faces = []
-    for neighbors, min_sz in [(5, 40), (4, 30), (3, 20)]:
+    for neighbors, min_sz in [(5, 40), (4, 30), (3, 20), (2, 15)]:
         faces = _face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=neighbors, minSize=(min_sz, min_sz))
         if len(faces) > 0:
             break

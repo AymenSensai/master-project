@@ -199,42 +199,43 @@ def recognize():
 
         results = gallery.search(probe_embed, top_k=1)
 
-        if results:
-            best_match = results[0]
-            threshold = 0.60
-            app.logger.info(f"DEBUG: Current recognition threshold is {threshold}")
-            similarity = float(best_match['similarity'])
-            matched = similarity >= threshold
-            face_detected = face_box is not None
+        if not results:
+            return jsonify({'matched': False, 'face_detected': face_detected,
+                            'face_box': face_box, 'error': 'Gallery is empty'}), 200
 
-            app.logger.info(
-                f"Recognize: {'Match' if matched else 'No match'} – "
-                f"{best_match['identity']} ({similarity:.3f}) face={face_detected}"
+        best_match = results[0]
+        threshold = 0.60
+        similarity = float(best_match['similarity'])
+        matched = similarity >= threshold
+        face_detected = face_box is not None
+
+        app.logger.info(
+            f"Recognize: {'Match' if matched else 'No match'} – "
+            f"{best_match['identity']} ({similarity:.3f}) face={face_detected}"
+        )
+
+        heatmap_b64 = None
+        xai_crop_b64 = None
+        if matched and face_detected:
+            heatmap_b64, xai_crop_b64 = get_base64_heatmap(
+                face_img, model, transform, DEVICE, best_match['embedding']
             )
 
-            heatmap_b64 = None
-            xai_crop_b64 = None
-            if matched and face_detected:
-                heatmap_b64, xai_crop_b64 = get_base64_heatmap(
-                    face_img, model, transform, DEVICE, best_match['embedding']
-                )
+        rel_gallery_path = os.path.relpath(best_match['path'], DATA_ROOT)
+        gallery_url = f'/data/{rel_gallery_path}'
 
-            # Construction of gallery image URL
-            rel_gallery_path = os.path.relpath(best_match['path'], DATA_ROOT)
-            gallery_url = f'/data/{rel_gallery_path}'
+        return jsonify({
+            'matched': matched,
+            'face_detected': face_detected,
+            'identity': best_match['identity'],
+            'similarity': round(float(similarity), 4),
+            'face_box': face_box,
+            'face_crop': xai_crop_b64 or face_crop_b64,
+            'heatmap':   heatmap_b64,
+            'gallery_image_url': gallery_url
+        })
 
-            return jsonify({
-                'matched': matched,
-                'face_detected': face_detected,
-                'identity': best_match['identity'],
-                'similarity': round(float(similarity), 4),
-                'face_box': face_box,
-                'face_crop': xai_crop_b64 or face_crop_b64,
-                'heatmap':   heatmap_b64,
-                'gallery_image_url': gallery_url
-            })
 
-        
     except Exception as e:
         app.logger.error(f"Recognize Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
