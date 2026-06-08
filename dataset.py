@@ -40,9 +40,13 @@ class TuftsFaceDataset(Dataset):
             self.transform = transforms.Compose([
                 transforms.Resize((img_size, img_size)),
                 transforms.RandomHorizontalFlip(),
-                # Consider adding RandomRotation or RandomCrop if needed
+                transforms.RandomRotation(degrees=10),
+                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2),
+                transforms.RandomGrayscale(p=0.2),
+                transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
                 transforms.ToTensor(),
-                normalize
+                normalize,
+                transforms.RandomErasing(p=0.3, scale=(0.02, 0.15)),
             ])
         else:
             self.transform = transforms.Compose([
