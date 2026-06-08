@@ -1,5 +1,6 @@
 import yaml
 import os
+import sys
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,7 +20,7 @@ def setup_logger(log_file: str = "training.log") -> logging.Logger:
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     
     # Console Handler
-    ch = logging.StreamHandler()
+    ch = logging.StreamHandler(sys.stdout)
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     
