@@ -13,7 +13,7 @@ config = load_config('config.yaml')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Load best checkpoint
-checkpoint = torch.load('checkpoints/model_best.pth', map_location=device)
+checkpoint = torch.load('checkpoints/model_best.pth', map_location=device, weights_only=False)
 num_classes = checkpoint.get('num_classes', 0)
 model = build_model(embedding_dim=512, pretrained=False, num_classes=num_classes)
 model.load_state_dict(checkpoint['model_state_dict'])
