@@ -115,10 +115,9 @@ def compute_tar_at_far(scores: np.ndarray, labels: np.ndarray, far_target: float
         threshold_idx = len(neg_scores) - 1
         
     threshold = neg_scores[threshold_idx]
-    
-    # Calculate TAR
+
     tar = np.sum(pos_scores >= threshold) / len(pos_scores)
-    return tar
+    return tar, float(threshold)
 
 def plot_tsne(embeddings: np.ndarray, labels: np.ndarray, domains: np.ndarray, save_path: str = "tsne_plot.png"):
     """

@@ -117,8 +117,8 @@ def evaluate(config_path: str, checkpoint_path: str, split: str = 'test'):
     
     # Calculate TAR @ specific FARs
     for far_target in config['eval']['far_targets']:
-        tar = compute_tar_at_far(pair_scores, pair_labels, far_target)
-        logger.info(f"TAR @ FAR={far_target}: {tar * 100:.2f}%")
+        tar, threshold = compute_tar_at_far(pair_scores, pair_labels, far_target)
+        logger.info(f"TAR @ FAR={far_target}: {tar * 100:.2f}% (threshold={threshold:.4f})")
         
     # Plot ROC Curve
     fpr, tpr, _ = roc_curve(pair_labels, pair_scores)
