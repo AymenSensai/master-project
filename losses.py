@@ -13,22 +13,40 @@ class TripletLoss(nn.Module):
         self.margin = margin
         self.ranking_loss = nn.MarginRankingLoss(margin=margin)
 
-    def forward(self, embeddings: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    def forward(self, embeddings: torch.Tensor, labels: torch.Tensor, domains: torch.Tensor = None) -> torch.Tensor:
         """
         embeddings: Shape (B, D) where B is batch size and D is embedding dimension
         labels: Shape (B,) containing identity labels
+        domains: Shape (B,) containing domain labels (0=VIS, 1=NIR). When provided,
+                 positives are forced to be cross-spectral pairs (same identity, different domain).
         """
         pwd = torch.cdist(embeddings, embeddings, p=2)
 
-        labels = labels.view(-1, 1)
-        mask_pos = (labels == labels.t()).float()
-        mask_neg = (labels != labels.t()).float()
+        labels_col = labels.view(-1, 1)
+        label_match = labels_col == labels_col.t()
+        eye = torch.eye(pwd.size(0), dtype=torch.bool, device=embeddings.device)
 
-        # Hardest positive: mask out negatives with 0, take max
-        dist_ap = (pwd * mask_pos).max(dim=1).values
+        if domains is not None:
+            domains_col = domains.view(-1, 1)
+            domain_diff = domains_col != domains_col.t()
+            # Prefer cross-spectral positives; fall back to same-domain if none exist for an anchor
+            mask_pos_cross = label_match & domain_diff & ~eye
+            has_cross = mask_pos_cross.any(dim=1, keepdim=True)
+            mask_pos = torch.where(has_cross, mask_pos_cross, label_match & ~eye)
+        else:
+            mask_pos = label_match & ~eye
 
-        # Hardest negative: mask out positives with large value, take min
-        dist_an = (pwd + (1 - mask_neg) * 1e6).min(dim=1).values
+        mask_neg = ~label_match & ~eye
+
+        dist_ap = torch.zeros(pwd.size(0), device=embeddings.device)
+        dist_an = torch.zeros(pwd.size(0), device=embeddings.device)
+
+        for i in range(pwd.size(0)):
+            pos_distances = pwd[i][mask_pos[i]]
+            dist_ap[i] = pos_distances.max() if pos_distances.size(0) > 0 else 0.0
+
+            neg_distances = pwd[i][mask_neg[i]]
+            dist_an[i] = neg_distances.min() if neg_distances.size(0) > 0 else 0.0
 
         y = torch.ones_like(dist_an)
         loss = self.ranking_loss(dist_an, dist_ap, y)
@@ -47,14 +65,15 @@ class CrossSpectralLoss(nn.Module):
         self.lambda_softmax = lambda_softmax
         self.lambda_triplet = lambda_triplet
 
-    def forward(self, embeddings: torch.Tensor, logits: torch.Tensor, labels: torch.Tensor):
+    def forward(self, embeddings: torch.Tensor, logits: torch.Tensor, labels: torch.Tensor, domains: torch.Tensor = None):
         """
         embeddings: Output of the L2 normalization layer
         logits: Output of the classifier FC layer
         labels: Ground truth identity labels
+        domains: Domain labels (0=VIS, 1=NIR) for cross-spectral triplet mining
         """
         loss_ce = self.cross_entropy(logits, labels) if logits is not None else torch.tensor(0.0).to(embeddings.device)
-        loss_triplet = self.triplet_loss(embeddings, labels)
+        loss_triplet = self.triplet_loss(embeddings, labels, domains)
         
         total_loss = self.lambda_softmax * loss_ce + self.lambda_triplet * loss_triplet
         

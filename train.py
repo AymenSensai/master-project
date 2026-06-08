@@ -3,55 +3,13 @@ import os
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
-import time
 import numpy as np
+import time
 
-from utils import load_config, setup_logger, save_checkpoint, set_seed, compute_tar_at_far
+from utils import load_config, setup_logger, save_checkpoint, set_seed
 from dataset import get_dataloader
 from model import build_model
 from losses import CrossSpectralLoss
-
-@torch.no_grad()
-def evaluate_epoch(model, dataloader, device, far_targets, logger, epoch, best_rank1):
-    model.eval()
-    all_embeds, all_labels, all_domains = [], [], []
-
-    for images, labels, domains in dataloader:
-        embeds = model(images.to(device), domain=domains.to(device))
-        all_embeds.append(embeds.cpu().numpy())
-        all_labels.extend(labels.numpy())
-        all_domains.extend(domains.numpy())
-
-    all_embeds = np.vstack(all_embeds)
-    all_labels = np.array(all_labels)
-    all_domains = np.array(all_domains)
-
-    vis_mask = all_domains == 0
-    nir_mask = all_domains == 1
-    vis_embeds, vis_labels = all_embeds[vis_mask], all_labels[vis_mask]
-    nir_embeds, nir_labels = all_embeds[nir_mask], all_labels[nir_mask]
-
-    if len(vis_embeds) == 0 or len(nir_embeds) == 0:
-        logger.warning(f"Epoch [{epoch}] Eval skipped: missing VIS or NIR samples.")
-        return 0.0, False
-
-    sim_matrix = np.dot(nir_embeds, vis_embeds.T)
-    rank1_acc = np.sum(vis_labels[np.argmax(sim_matrix, axis=1)] == nir_labels) / len(nir_labels)
-
-    pair_scores = sim_matrix.flatten()
-    nir_exp = np.repeat(nir_labels[:, None], len(vis_labels), axis=1)
-    vis_exp = np.repeat(vis_labels[None, :], len(nir_labels), axis=0)
-    pair_labels = (nir_exp == vis_exp).astype(int).flatten()
-
-    tar_str = "  ".join(
-        f"TAR@FAR={f}: {compute_tar_at_far(pair_scores, pair_labels, f)*100:.2f}%"
-        for f in far_targets
-    )
-    is_best = rank1_acc > best_rank1
-    flag = " <-- BEST" if is_best else ""
-    logger.info(f"Epoch [{epoch}] Eval -- Rank-1: {rank1_acc*100:.2f}%  {tar_str}{flag}")
-    return rank1_acc, is_best
-
 
 def train_epoch(model, dataloader, criterion, optimizer, device, epoch, logger):
     model.train()
@@ -72,7 +30,7 @@ def train_epoch(model, dataloader, criterion, optimizer, device, epoch, logger):
         embeds, logits = model(images, domain=domains)
         
         # Losses
-        loss, loss_ce, loss_triplet = criterion(embeds, logits, labels)
+        loss, loss_ce, loss_triplet = criterion(embeds, logits, labels, domains)
         
         # Backward and optimize
         loss.backward()
@@ -92,6 +50,35 @@ def train_epoch(model, dataloader, criterion, optimizer, device, epoch, logger):
     logger.info(f"Epoch [{epoch}] completed in {epoch_time:.2f}s, Average Loss: {epoch_loss:.4f}")
     return epoch_loss
 
+@torch.no_grad()
+def compute_rank1(model, dataloader, device):
+    model.eval()
+    all_embeds, all_labels, all_domains = [], [], []
+
+    for images, labels, domains in dataloader:
+        embeds = model(images.to(device), domain=domains.to(device))
+        all_embeds.append(embeds.cpu().numpy())
+        all_labels.extend(labels.numpy())
+        all_domains.extend(domains.numpy())
+
+    all_embeds = np.vstack(all_embeds)
+    all_labels = np.array(all_labels)
+    all_domains = np.array(all_domains)
+
+    vis_mask = all_domains == 0
+    nir_mask = all_domains == 1
+    vis_embeds, vis_labels = all_embeds[vis_mask], all_labels[vis_mask]
+    nir_embeds, nir_labels = all_embeds[nir_mask], all_labels[nir_mask]
+
+    if len(vis_embeds) == 0 or len(nir_embeds) == 0:
+        return 0.0
+
+    sim_matrix = np.dot(nir_embeds, vis_embeds.T)
+    predicted_labels = vis_labels[np.argmax(sim_matrix, axis=1)]
+    model.train()
+    return float(np.sum(predicted_labels == nir_labels) / len(nir_labels))
+
+
 def main(config_path: str, resume: bool = False):
     config = load_config(config_path)
     
@@ -102,24 +89,22 @@ def main(config_path: str, resume: bool = False):
     logger.info(f"Starting training on {device}")
     
     # 1. Dataset
-    crop_faces = config['dataset'].get('crop_faces', True)
     train_loader = get_dataloader(
         root_dir=config['dataset']['root_dir'],
         split='train',
         batch_size=config['train']['batch_size'],
         img_size=config['dataset']['img_size'],
         num_workers=config['dataset']['num_workers'],
-        crop_faces=crop_faces,
     )
+
     val_loader = get_dataloader(
         root_dir=config['dataset']['root_dir'],
         split='test',
         batch_size=config['eval']['batch_size'],
         img_size=config['dataset']['img_size'],
         num_workers=config['dataset']['num_workers'],
-        crop_faces=crop_faces,
     )
-
+    
     num_classes = len(train_loader.dataset.label_to_idx)
     logger.info(f"Training on {num_classes} identities.")
     
@@ -154,7 +139,6 @@ def main(config_path: str, resume: bool = False):
     os.makedirs(save_dir, exist_ok=True)
     
     start_epoch = 1
-    best_loss = float('inf')
     best_rank1 = 0.0
 
     # Resume logic
@@ -167,25 +151,31 @@ def main(config_path: str, resume: bool = False):
         if 'scheduler_state_dict' in checkpoint:
             scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         else:
-            # Manually step scheduler to catch up if state wasn't saved
             for _ in range(checkpoint['epoch']):
                 scheduler.step()
-        
+
         start_epoch = checkpoint['epoch'] + 1
-        best_loss = checkpoint.get('loss', float('inf'))
         best_rank1 = checkpoint.get('rank1', 0.0)
-        logger.info(f"Resuming from epoch {start_epoch}")
-    
+        logger.info(f"Resuming from epoch {start_epoch}, best Rank-1: {best_rank1 * 100:.2f}%")
+
     # 4. Training Loop
-    far_targets = config['eval']['far_targets']
     epochs = config['train']['epochs']
+    patience = config['train'].get('early_stopping_patience', 20)
+    patience_counter = 0
+
     for epoch in range(start_epoch, epochs + 1):
         loss = train_epoch(model, train_loader, criterion, optimizer, device, epoch, logger)
         scheduler.step()
 
-        rank1, is_best = evaluate_epoch(model, val_loader, device, far_targets, logger, epoch, best_rank1)
+        rank1 = compute_rank1(model, val_loader, device)
+        logger.info(f"Epoch [{epoch}] Val Rank-1: {rank1 * 100:.2f}% (best: {best_rank1 * 100:.2f}%)")
+
+        is_best = rank1 > best_rank1
         if is_best:
             best_rank1 = rank1
+            patience_counter = 0
+        else:
+            patience_counter += 1
 
         save_checkpoint({
             'epoch': epoch,
@@ -197,7 +187,11 @@ def main(config_path: str, resume: bool = False):
             'num_classes': num_classes
         }, is_best, save_dir, filename=f"checkpoint_epoch_{epoch}.pth")
 
-    logger.info("Training complete.")
+        if patience_counter >= patience:
+            logger.info(f"Early stopping at epoch {epoch}: no Rank-1 improvement for {patience} epochs.")
+            break
+
+    logger.info(f"Training complete. Best Rank-1: {best_rank1 * 100:.2f}%")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train Cross Spectral Model")

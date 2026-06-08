@@ -97,7 +97,7 @@ python3 main.py train --config config.yaml --resume
 To evaluate a trained checkpoint:
 
 ```bash
-python3 main.py eval --config config.yaml --checkpoint checkpoints/model_best.pth
+    python3 main.py eval --config config.yaml --checkpoint checkpoints/model_best.pth
 ```
 
 ## 🧠 System Architecture & Logic

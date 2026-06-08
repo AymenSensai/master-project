@@ -4,10 +4,9 @@ device: "cuda"
 
 # Dataset Configurations
 dataset:
-  root_dir: "./data/TuftsFaceCropped"
+  root_dir: "./data/TuftsFaceDatabase"
   img_size: 112
-  num_workers: 12
-  crop_faces: false
+  num_workers: 4
 
 # Training Configurations
 train:
@@ -20,8 +19,9 @@ train:
   # Loss weights
   lambda_softmax: 1.0
   lambda_triplet: 1.0
-  margin: 0.7
+  margin: 0.3
   save_dir: "./checkpoints"
+  early_stopping_patience: 20
 
 # Evaluation Configurations
 eval:
