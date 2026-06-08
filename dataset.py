@@ -133,8 +133,7 @@ class TuftsFaceDataset(Dataset):
             image = Image.new('RGB', (self.img_size, self.img_size))
         else:
             if self.crop_faces:
-                # Use the same unified cropping as in inference
-                face_img, _ = detect_and_crop_face(img_bgr, padding=0.15)
+                face_img, _ = detect_and_crop_face(img_bgr, padding=0.15, fast=(self.split == 'train'))
                 # Convert BGR to RGB
                 face_rgb = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
                 image = Image.fromarray(face_rgb)

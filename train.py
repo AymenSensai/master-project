@@ -62,6 +62,7 @@ def main(config_path: str, resume: bool = False):
         batch_size=config['train']['batch_size'],
         img_size=config['dataset']['img_size'],
         num_workers=config['dataset']['num_workers'],
+        crop_faces=False,
     )
     
     num_classes = len(train_loader.dataset.label_to_idx)

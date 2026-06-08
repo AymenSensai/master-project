@@ -56,25 +56,29 @@ def set_seed(seed: int):
 # --- FACE DETECTION UTILITIES ---
 _face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-def detect_and_crop_face(img_bgr: np.ndarray, padding: float = 0.15) -> Tuple[np.ndarray, Optional[Dict]]:
+def detect_and_crop_face(img_bgr: np.ndarray, padding: float = 0.15, fast: bool = False) -> Tuple[np.ndarray, Optional[Dict]]:
     """
     Detects the largest face and returns a cropped version with padding.
     Returns: (cropped_img, box_dict)
+    fast=True: single-pass detection for training speed; falls back to full image if no face found.
     """
     if img_bgr is None:
         return None, None
-        
+
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     # Equalise histogram so detection is robust to dark/bright webcam conditions
     gray = cv2.equalizeHist(gray)
     ih, iw = img_bgr.shape[:2]
 
-    # Progressive detection — loosens constraints until a face is found
-    faces = []
-    for neighbors, min_sz in [(5, 40), (4, 30), (3, 20), (2, 15)]:
-        faces = _face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=neighbors, minSize=(min_sz, min_sz))
-        if len(faces) > 0:
-            break
+    if fast:
+        faces = _face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(20, 20))
+    else:
+        # Progressive detection — loosens constraints until a face is found
+        faces = []
+        for neighbors, min_sz in [(5, 40), (4, 30), (3, 20), (2, 15)]:
+            faces = _face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=neighbors, minSize=(min_sz, min_sz))
+            if len(faces) > 0:
+                break
             
     if len(faces) == 0:
         return img_bgr, None # Fallback to full image

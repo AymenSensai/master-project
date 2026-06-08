@@ -4,7 +4,7 @@ device: "cuda"
 
 # Dataset Configurations
 dataset:
-  root_dir: "./data/TuftsFaceDatabase"
+  root_dir: "./data/TuftsFaceCropped"
   img_size: 112
   num_workers: 4
 
