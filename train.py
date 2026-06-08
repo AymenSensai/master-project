@@ -169,11 +169,13 @@ def main(config_path: str, resume: bool = False):
 
     # 4. Training Loop
     epochs = config['train']['epochs']
+    rank1 = None
     for epoch in range(start_epoch, epochs + 1):
         train_loss = train_epoch(model, train_loader, criterion, optimizer, device, epoch, logger)
         scheduler.step()
 
         # Periodic evaluation
+        rank1 = None
         if epoch % eval_every == 0 or epoch == epochs:
             logger.info(f"--- Evaluation at Epoch [{epoch}] ---")
             val_loss = compute_val_loss(model, val_loader, criterion, device)
@@ -182,17 +184,14 @@ def main(config_path: str, resume: bool = False):
             rank1_str = f"{rank1*100:.2f}%" if rank1 is not None else "N/A"
             improved = rank1 is not None and rank1 > best_rank1
 
+            if improved:
+                best_rank1 = rank1
+
             logger.info(f"Epoch [{epoch}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Rank-1: {rank1_str} | {'IMPROVED ✓' if improved else 'no improvement'}")
             logger.info(f"Best Rank-1 so far: {best_rank1*100:.2f}%")
             logger.info(f"-------------------------------------")
 
-            if improved:
-                best_rank1 = rank1
-
-        # Save checkpoint (best by loss)
-        is_best = train_loss < best_loss
-        if is_best:
-            best_loss = train_loss
+        is_best = rank1 is not None and rank1 >= best_rank1
 
         save_checkpoint({
             'epoch': epoch,
