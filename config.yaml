@@ -20,7 +20,7 @@ train:
   # Loss weights
   lambda_softmax: 1.0
   lambda_triplet: 1.0
-  margin: 0.3
+  margin: 0.7
   save_dir: "./checkpoints"
 
 # Evaluation Configurations
