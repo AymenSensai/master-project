@@ -79,13 +79,14 @@ def evaluate_rank1(model, val_loader, device, logger):
 
 @torch.no_grad()
 def compute_val_loss(model, val_loader, criterion, device):
-    model.eval()
+    model.train()  # train mode to get (embeds, logits)
     total_loss = 0.0
     for images, labels, domains in val_loader:
         images, labels, domains = images.to(device), labels.to(device), domains.to(device)
         embeds, logits = model(images, domain=domains)
         loss, _, _ = criterion(embeds, logits, labels)
         total_loss += loss.item()
+    model.eval()
     return total_loss / len(val_loader)
 
 
