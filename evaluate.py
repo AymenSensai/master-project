@@ -56,7 +56,9 @@ def evaluate(config_path: str, checkpoint_path: str, split: str = 'test'):
         return
     
     # 2. Model & Checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    import numpy._core.multiarray
+    torch.serialization.add_safe_globals([numpy._core.multiarray.scalar])
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     num_classes = checkpoint.get('num_classes', 0)
     
     model = build_model(embedding_dim=512, pretrained=False, num_classes=num_classes)
