@@ -89,12 +89,15 @@ def main(config_path: str, resume: bool = False):
     logger.info(f"Starting training on {device}")
     
     # 1. Dataset
+    crop_faces = config['dataset'].get('crop_faces', True)
+
     train_loader = get_dataloader(
         root_dir=config['dataset']['root_dir'],
         split='train',
         batch_size=config['train']['batch_size'],
         img_size=config['dataset']['img_size'],
         num_workers=config['dataset']['num_workers'],
+        crop_faces=crop_faces,
     )
 
     val_loader = get_dataloader(
@@ -103,6 +106,7 @@ def main(config_path: str, resume: bool = False):
         batch_size=config['eval']['batch_size'],
         img_size=config['dataset']['img_size'],
         num_workers=config['dataset']['num_workers'],
+        crop_faces=crop_faces,
     )
     
     num_classes = len(train_loader.dataset.label_to_idx)
