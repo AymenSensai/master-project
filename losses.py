@@ -21,22 +21,24 @@ class TripletLoss(nn.Module):
         # Compute pairwise distance matrix
         pwd = torch.cdist(embeddings, embeddings, p=2)
         
-        # Create masks for positives and negatives (exclude self on diagonal)
+        # Create masks for positives and negatives
         labels = labels.view(-1, 1)
-        eye = torch.eye(pwd.size(0), dtype=torch.bool, device=embeddings.device)
-        mask_pos = (labels == labels.t()) & ~eye
+        mask_pos = labels == labels.t()
         mask_neg = labels != labels.t()
-
-        # For each anchor, find the hardest positive (max distance) and hardest negative (min distance)
-        dist_ap = torch.zeros(pwd.size(0), device=embeddings.device)
-        dist_an = torch.zeros(pwd.size(0), device=embeddings.device)
-
+        
+        # For each anchor, find the hardest positive (max distance among positives)
+        dist_ap = torch.zeros(pwd.size(0)).to(embeddings.device)
+        # For each anchor, find the hardest negative (min distance among negatives)
+        dist_an = torch.zeros(pwd.size(0)).to(embeddings.device)
+        
         for i in range(pwd.size(0)):
+            # Hardest positive
             pos_distances = pwd[i][mask_pos[i]]
-            dist_ap[i] = pos_distances.max() if pos_distances.numel() > 0 else 0.0
-
+            dist_ap[i] = pos_distances.max() if pos_distances.size(0) > 0 else 0.0
+            
+            # Hardest negative
             neg_distances = pwd[i][mask_neg[i]]
-            dist_an[i] = neg_distances.min() if neg_distances.numel() > 0 else 0.0
+            dist_an[i] = neg_distances.min() if neg_distances.size(0) > 0 else 0.0
             
         y = torch.ones_like(dist_an)
         

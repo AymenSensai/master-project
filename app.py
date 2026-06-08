@@ -51,7 +51,7 @@ def load_checkpoint(path, device):
         return model
     
     try:
-        checkpoint = torch.load(path, map_location=device, weights_only=False)
+        checkpoint = torch.load(path, map_location=device)
         num_classes = checkpoint.get('num_classes', 0)
         model = build_model(embedding_dim=512, pretrained=False, num_classes=num_classes)
         model.load_state_dict(checkpoint['model_state_dict'])

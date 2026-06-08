@@ -1,52 +1,13 @@
 import os
-import random
 from PIL import Image
 import torch
-from torch.utils.data import Dataset, Sampler
+from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from typing import Tuple, List, Dict
 import numpy as np
 import cv2
 
 from utils import detect_and_crop_face
-
-
-class BalancedIdentitySampler(Sampler):
-    """
-    Samples num_identities identities per batch, each with samples_per_identity samples.
-    Guarantees every batch has multiple samples per identity — required for triplet loss.
-    Produces approximately the same number of samples as the original dataset per epoch.
-    """
-    def __init__(self, dataset, num_identities: int = 32, samples_per_identity: int = 4):
-        self.dataset = dataset
-        self.num_identities = num_identities
-        self.samples_per_identity = samples_per_identity
-
-        self.label_to_indices = {}
-        for idx, (_, label, _) in enumerate(dataset.samples):
-            self.label_to_indices.setdefault(label, []).append(idx)
-
-        self.labels = list(self.label_to_indices.keys())
-        # How many rounds needed to match original dataset size
-        self.rounds = max(1, len(dataset) // (len(self.labels) * samples_per_identity))
-
-    def __iter__(self):
-        indices = []
-        for _ in range(self.rounds):
-            labels = self.labels.copy()
-            random.shuffle(labels)
-            for label in labels:
-                pool = self.label_to_indices[label]
-                chosen = random.choices(pool, k=self.samples_per_identity)
-                indices.extend(chosen)
-
-        batch_size = self.num_identities * self.samples_per_identity
-        random.shuffle(indices)
-        for i in range(0, len(indices) - batch_size + 1, batch_size):
-            yield from indices[i:i + batch_size]
-
-    def __len__(self):
-        return self.rounds * len(self.labels) * self.samples_per_identity
 
 class TuftsFaceDataset(Dataset):
     """
@@ -79,12 +40,9 @@ class TuftsFaceDataset(Dataset):
             self.transform = transforms.Compose([
                 transforms.Resize((img_size, img_size)),
                 transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(degrees=15),
-                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.3, hue=0.05),
-                transforms.RandomGrayscale(p=0.1),
+                # Consider adding RandomRotation or RandomCrop if needed
                 transforms.ToTensor(),
-                normalize,
-                transforms.RandomErasing(p=0.3, scale=(0.02, 0.2)),
+                normalize
             ])
         else:
             self.transform = transforms.Compose([
@@ -175,7 +133,8 @@ class TuftsFaceDataset(Dataset):
             image = Image.new('RGB', (self.img_size, self.img_size))
         else:
             if self.crop_faces:
-                face_img, _ = detect_and_crop_face(img_bgr, padding=0.15, fast=(self.split == 'train'))
+                # Use the same unified cropping as in inference
+                face_img, _ = detect_and_crop_face(img_bgr, padding=0.15)
                 # Convert BGR to RGB
                 face_rgb = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
                 image = Image.fromarray(face_rgb)
@@ -189,17 +148,5 @@ class TuftsFaceDataset(Dataset):
 
 def get_dataloader(root_dir: str, split: str, batch_size: int, img_size: int, num_workers: int, crop_faces: bool = True):
     dataset = TuftsFaceDataset(root_dir=root_dir, split=split, img_size=img_size, crop_faces=crop_faces)
-    if split == 'train':
-        sampler = BalancedIdentitySampler(dataset, num_identities=32, samples_per_identity=4)
-        return torch.utils.data.DataLoader(
-            dataset, batch_size=batch_size, sampler=sampler,
-            num_workers=num_workers, drop_last=True,
-            multiprocessing_context='fork' if num_workers > 0 else None,
-            persistent_workers=num_workers > 0,
-        )
-    return torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False,
-        num_workers=num_workers, drop_last=False,
-        multiprocessing_context='fork' if num_workers > 0 else None,
-        persistent_workers=num_workers > 0,
-    )
+    shuffle = (split == 'train')
+    return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last=shuffle)
