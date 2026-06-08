@@ -49,6 +49,7 @@ def evaluate(config_path: str, checkpoint_path: str, split: str = 'test'):
         batch_size=config['eval']['batch_size'],
         img_size=config['dataset']['img_size'],
         num_workers=config['dataset']['num_workers'],
+        crop_faces=False,
     )
     
     if len(test_loader.dataset) == 0:
