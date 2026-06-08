@@ -6,7 +6,7 @@ device: "cuda"
 dataset:
   root_dir: "./data/TuftsFaceDatabase"
   img_size: 112
-  num_workers: 0
+  num_workers: 4
 
 # Training Configurations
 train:
