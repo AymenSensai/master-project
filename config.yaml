@@ -21,6 +21,7 @@ train:
   lambda_triplet: 1.0
   margin: 0.5
   save_dir: "./checkpoints"
+  eval_every: 10
 
 # Evaluation Configurations
 eval:
