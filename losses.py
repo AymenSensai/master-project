@@ -8,10 +8,8 @@ class TripletLoss(nn.Module):
     For a given batch of embeddings and labels, it finds the hardest positive 
     and hardest negative for each anchor.
     """
-    def __init__(self, margin: float = 0.3):
+    def __init__(self):
         super(TripletLoss, self).__init__()
-        self.margin = margin
-        self.ranking_loss = nn.MarginRankingLoss(margin=margin)
 
     def forward(self, embeddings: torch.Tensor, labels: torch.Tensor, domains: torch.Tensor = None) -> torch.Tensor:
         """
@@ -48,8 +46,7 @@ class TripletLoss(nn.Module):
             neg_distances = pwd[i][mask_neg[i]]
             dist_an[i] = neg_distances.min() if neg_distances.size(0) > 0 else 0.0
 
-        y = torch.ones_like(dist_an)
-        loss = self.ranking_loss(dist_an, dist_ap, y)
+        loss = F.softplus(dist_ap - dist_an).mean()
         return loss
 
 class CrossSpectralLoss(nn.Module):
@@ -59,7 +56,7 @@ class CrossSpectralLoss(nn.Module):
     """
     def __init__(self, margin: float = 0.3, lambda_softmax: float = 1.0, lambda_triplet: float = 1.0):
         super(CrossSpectralLoss, self).__init__()
-        self.triplet_loss = TripletLoss(margin=margin)
+        self.triplet_loss = TripletLoss()
         self.cross_entropy = nn.CrossEntropyLoss()
         
         self.lambda_softmax = lambda_softmax
