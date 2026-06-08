@@ -15,6 +15,7 @@ class BalancedIdentitySampler(Sampler):
     """
     Samples num_identities identities per batch, each with samples_per_identity samples.
     Guarantees every batch has multiple samples per identity — required for triplet loss.
+    Produces approximately the same number of samples as the original dataset per epoch.
     """
     def __init__(self, dataset, num_identities: int = 32, samples_per_identity: int = 4):
         self.dataset = dataset
@@ -26,25 +27,26 @@ class BalancedIdentitySampler(Sampler):
             self.label_to_indices.setdefault(label, []).append(idx)
 
         self.labels = list(self.label_to_indices.keys())
+        # How many rounds needed to match original dataset size
+        self.rounds = max(1, len(dataset) // (len(self.labels) * samples_per_identity))
 
     def __iter__(self):
         indices = []
-        labels = self.labels.copy()
-        random.shuffle(labels)
+        for _ in range(self.rounds):
+            labels = self.labels.copy()
+            random.shuffle(labels)
+            for label in labels:
+                pool = self.label_to_indices[label]
+                chosen = random.choices(pool, k=self.samples_per_identity)
+                indices.extend(chosen)
 
-        for label in labels:
-            pool = self.label_to_indices[label]
-            chosen = random.choices(pool, k=self.samples_per_identity)
-            indices.extend(chosen)
-
-        # Yield in batches of num_identities * samples_per_identity
         batch_size = self.num_identities * self.samples_per_identity
         random.shuffle(indices)
         for i in range(0, len(indices) - batch_size + 1, batch_size):
             yield from indices[i:i + batch_size]
 
     def __len__(self):
-        return len(self.labels) * self.samples_per_identity
+        return self.rounds * len(self.labels) * self.samples_per_identity
 
 class TuftsFaceDataset(Dataset):
     """
