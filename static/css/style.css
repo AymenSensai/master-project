@@ -340,6 +340,7 @@ main {
 }
 
 .status-icon {
+    position: relative;
     width: 14px;
     height: 14px;
     border-radius: 50%;
@@ -846,13 +847,16 @@ body.live-mode #webcam-card .webcam-container {
     }
 }
 
-top: -4px;
-left: -4px;
-right: -4px;
-bottom: -4px;
-border-radius: 50%;
-border: 2px solid #10b981;
-animation: ping 1.5s infinite;
+.result-card.match .status-icon::after {
+    content: "";
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border-radius: 50%;
+    border: 2px solid #10b981;
+    animation: ping 1.5s infinite;
 }
 
 .system-log {
