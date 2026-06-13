@@ -7,7 +7,6 @@ dataset:
   root_dir: "./data/TuftsFaceCropped"
   img_size: 112
   num_workers: 4
-  crop_faces: false
 
 # Training Configurations
 train:
