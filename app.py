@@ -279,7 +279,8 @@ def get_identities():
 
 @app.route('/api/refresh_gallery', methods=['POST'])
 def refresh_gallery():
-    gallery.refresh_gallery()
+    force = request.json.get('force', False) if request.is_json else False
+    gallery.refresh_gallery(force=force)
     return jsonify({'status': 'success', 'count': len(gallery.embeddings)})
 
 @app.route('/api/stats', methods=['GET'])

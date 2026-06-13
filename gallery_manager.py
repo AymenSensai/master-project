@@ -2,6 +2,8 @@ import os
 import io
 import cv2
 import torch
+import pickle
+import hashlib
 from PIL import Image
 import numpy as np
 from typing import List, Dict, Tuple
@@ -10,27 +12,77 @@ from utils import detect_and_crop_face
 
 
 class GalleryManager:
-    def __init__(self, model, preprocess_fn, device, gallery_dir='gallery'):
+    def __init__(self, model, preprocess_fn, device, gallery_dir='gallery', cache_path='checkpoints/gallery_cache.pkl'):
         self.model = model
         self.preprocess_fn = preprocess_fn
         self.device = device
         self.gallery_dir = gallery_dir
-        self.embeddings = []  # List of (embedding, identity_name, image_path)
-        
+        self.cache_path = cache_path
+        self.embeddings = []
+        self.skipped_identities = []
+
         if not os.path.exists(self.gallery_dir):
             os.makedirs(self.gallery_dir)
             print(f"Created gallery directory: {self.gallery_dir}")
         else:
             self.refresh_gallery()
 
-    def refresh_gallery(self):
+    def _fingerprint(self) -> str:
+        """MD5 of every image path + its last-modified time in the gallery."""
+        entries = []
+        for identity in sorted(os.listdir(self.gallery_dir)):
+            id_path = os.path.join(self.gallery_dir, identity)
+            if not os.path.isdir(id_path):
+                continue
+            for f in sorted(os.listdir(id_path)):
+                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
+                    full = os.path.join(id_path, f)
+                    entries.append(f"{full}:{os.path.getmtime(full)}")
+        return hashlib.md5('\n'.join(entries).encode()).hexdigest()
+
+    def _load_cache(self) -> bool:
+        if not os.path.exists(self.cache_path):
+            return False
+        try:
+            with open(self.cache_path, 'rb') as f:
+                cache = pickle.load(f)
+            if cache.get('fingerprint') != self._fingerprint():
+                print("Gallery: cache obsolète (fichiers modifiés), recalcul en cours...")
+                return False
+            self.embeddings         = cache['embeddings']
+            self.skipped_identities = cache.get('skipped_identities', [])
+            print(f"Gallery: {len(self.embeddings)} identités chargées depuis le cache (démarrage instantané).")
+            return True
+        except Exception as e:
+            print(f"Gallery: échec du chargement du cache ({e}), recalcul en cours...")
+            return False
+
+    def _save_cache(self):
+        try:
+            os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+            with open(self.cache_path, 'wb') as f:
+                pickle.dump({
+                    'fingerprint':        self._fingerprint(),
+                    'embeddings':         self.embeddings,
+                    'skipped_identities': self.skipped_identities,
+                }, f)
+            print(f"Gallery: cache sauvegardé → {self.cache_path}")
+        except Exception as e:
+            print(f"Gallery: impossible de sauvegarder le cache ({e})")
+
+    def refresh_gallery(self, force: bool = False):
         """
         Scans the gallery directory and computes embeddings for all VIS images.
+        Loads from disk cache when available and gallery has not changed.
+        Pass force=True to bypass the cache and recompute everything.
         Expected structure: gallery/identity_name/image.jpg
         """
         self.embeddings = []
         self.skipped_identities = []
         if not os.path.exists(self.gallery_dir):
+            return
+
+        if not force and self._load_cache():
             return
 
         identities = sorted([d for d in os.listdir(self.gallery_dir) if os.path.isdir(os.path.join(self.gallery_dir, d))])
@@ -94,6 +146,7 @@ class GalleryManager:
         loaded  = len(self.embeddings)
         print(f"Gallery refreshed: {loaded}/{total} identités chargées" +
               (f" ({skipped} ignorées — voir warnings ci-dessus)." if skipped else "."))
+        self._save_cache()
 
     def search(self, probe_embedding: np.ndarray, top_k: int = 5) -> List[Dict]:
         """
