@@ -227,8 +227,16 @@
                     <div class="stats-card">
                         <h3>Base de Données</h3>
                         <div class="stat-item">
-                            <span class="stat-label">Identités Totales</span>
+                            <span class="stat-label">Identités chargées</span>
                             <span id="stat-identities" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Identités sur disque</span>
+                            <span id="stat-identities-disk" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-item" id="stat-skipped-row" style="display:none">
+                            <span class="stat-label" style="color:var(--danger)">Ignorées</span>
+                            <span id="stat-skipped" class="stat-value" style="color:var(--danger)">0</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-label">Images VIS</span>

@@ -2,6 +2,7 @@ import os
 import io
 import random
 import base64
+import hashlib
 import torch
 import torch.nn as nn
 from flask import Flask, request, jsonify, render_template, send_from_directory
@@ -34,6 +35,11 @@ DATA_ROOT = config['dataset']['root_dir']
 VIS_GALLERY_PATH = os.path.join(DATA_ROOT, 'VIS')
 NIR_GALLERY_PATH = os.path.join(DATA_ROOT, 'NIR')
 _IMG_EXTS = ('.jpg', '.jpeg', '.png', '.bmp')
+
+THUMB_DIR  = os.path.join(os.path.dirname(__file__), 'static', 'thumbs')
+THUMB_SIZE = (160, 160)
+THUMB_QUALITY = 75
+os.makedirs(THUMB_DIR, exist_ok=True)
 
 # Initialize Haar Cascade for Face Detection
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -89,17 +95,43 @@ def index():
 def serve_data(filename):
     return send_from_directory(DATA_ROOT, filename)
 
+def _make_thumbnail(src_path: str) -> str:
+    """Generate a 160×160 JPEG thumbnail and cache it in static/thumbs/.
+    Returns the cache filename (not the full path)."""
+    cache_key  = hashlib.md5(src_path.encode()).hexdigest()
+    thumb_name = cache_key + '.jpg'
+    thumb_path = os.path.join(THUMB_DIR, thumb_name)
+
+    if not os.path.exists(thumb_path):
+        img = Image.open(src_path).convert('RGB')
+        img.thumbnail(THUMB_SIZE, Image.LANCZOS)
+        img.save(thumb_path, 'JPEG', quality=THUMB_QUALITY, optimize=True)
+
+    return thumb_name
+
+@app.route('/thumbs/<filename>')
+def serve_thumb(filename):
+    response = send_from_directory(THUMB_DIR, filename)
+    response.cache_control.max_age = 86400  # browser caches for 24 h
+    response.cache_control.public = True
+    return response
+
 @app.route('/api/gallery', methods=['GET'])
 def get_gallery():
-    # Construct relative paths for the frontend
     gallery_items = []
     for item in gallery.embeddings:
-        # item['path'] is absolute or relative to project root
-        # We need a path relative to DATA_ROOT to use with /data/ route
         rel_path = os.path.relpath(item['path'], DATA_ROOT)
+        abs_path  = os.path.abspath(item['path'])
+        try:
+            thumb_name = _make_thumbnail(abs_path)
+            thumb_url  = f'/thumbs/{thumb_name}'
+        except Exception as e:
+            logging.warning(f"Thumbnail failed for {abs_path}: {e}")
+            thumb_url = f'/data/{rel_path}'
         gallery_items.append({
-            'identity': item['identity'],
-            'image_url': f'/data/{rel_path}'
+            'identity':      item['identity'],
+            'image_url':     f'/data/{rel_path}',
+            'thumbnail_url': thumb_url,
         })
     return jsonify({'gallery': gallery_items})
 
@@ -256,12 +288,27 @@ def get_stats():
         vis_root = os.path.join(DATA_ROOT, 'VIS')
         nir_root = os.path.join(DATA_ROOT, 'NIR')
         
-        vis_count = sum([len(files) for r, d, files in os.walk(vis_root) if files])
-        nir_count = sum([len(files) for r, d, files in os.walk(nir_root) if files])
-        identities_count = len(gallery.get_identities())
-        
+        img_exts = ('.jpg', '.jpeg', '.png', '.bmp')
+        vis_count = sum(
+            1 for r, d, files in os.walk(vis_root)
+            for f in files if f.lower().endswith(img_exts)
+        )
+        nir_count = sum(
+            1 for r, d, files in os.walk(nir_root)
+            for f in files if f.lower().endswith(img_exts)
+        )
+        identities_on_disk = sum(
+            1 for d in os.listdir(vis_root)
+            if os.path.isdir(os.path.join(vis_root, d))
+        )
+        identities_loaded = len(gallery.get_identities())
+        skipped = getattr(gallery, 'skipped_identities', [])
+
         return jsonify({
-            'identities': identities_count,
+            'identities': identities_loaded,
+            'identities_on_disk': identities_on_disk,
+            'identities_skipped': len(skipped),
+            'skipped_details': skipped,
             'vis_images': vis_count,
             'nir_images': nir_count,
             'device': str(DEVICE).upper(),

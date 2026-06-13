@@ -29,49 +29,54 @@ class GalleryManager:
         Expected structure: gallery/identity_name/image.jpg
         """
         self.embeddings = []
+        self.skipped_identities = []
         if not os.path.exists(self.gallery_dir):
             return
 
-        identities = [d for d in os.listdir(self.gallery_dir) if os.path.isdir(os.path.join(self.gallery_dir, d))]
-        
+        identities = sorted([d for d in os.listdir(self.gallery_dir) if os.path.isdir(os.path.join(self.gallery_dir, d))])
+        total = len(identities)
+
         for identity in identities:
             id_path = os.path.join(self.gallery_dir, identity)
             images = sorted([f for f in os.listdir(id_path) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))])
 
             if not images:
+                print(f"  [SKIP] '{identity}' — dossier vide ou aucun fichier image valide.")
+                self.skipped_identities.append({'identity': identity, 'reason': 'empty_dir'})
                 continue
 
             embed_list = []
+            failed_images = []
             for img_name in images:
                 img_path = os.path.join(id_path, img_name)
                 try:
                     img_bgr = cv2.imread(img_path)
                     if img_bgr is None:
+                        print(f"  [WARN] '{identity}/{img_name}' — impossible de lire l'image (corrompue ?).")
+                        failed_images.append(img_name)
                         continue
-                        
+
                     face_img, _ = detect_and_crop_face(img_bgr, padding=0.15)
-                    
-                    # Convert BGR to RGB for PIL/Torch
+
                     face_rgb = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
-                    face_pil = Image.fromarray(face_rgb)
-                    
-                    # Reuse the same preprocess logic as app.py
-                    # (Assuming self.preprocess_fn expects bytes, I'll update it to handle PIL or modify app.py)
-                    # Actually, app.py's preprocess_image expects bytes.
-                    # Let's just use the tensor logic directly here to be safe.
-                    
-                    # Wait, let's keep it simple. If we have face_img, we can encode it back to bytes.
+
                     _, buf = cv2.imencode('.jpg', face_img)
                     tensor = self.preprocess_fn(buf.tobytes())
-                    
+
                     with torch.no_grad():
                         emb = self.model(tensor).cpu().numpy()[0]
                     embed_list.append(emb)
                 except Exception as e:
-                    print(f"Error processing {img_path}: {e}")
+                    print(f"  [WARN] '{identity}/{img_name}' — erreur durant l'embedding : {e}")
+                    failed_images.append(img_name)
 
             if not embed_list:
+                print(f"  [SKIP] '{identity}' — aucun embedding généré ({len(failed_images)}/{len(images)} images en échec).")
+                self.skipped_identities.append({'identity': identity, 'reason': 'all_images_failed', 'failed': failed_images})
                 continue
+
+            if failed_images:
+                print(f"  [WARN] '{identity}' — {len(failed_images)}/{len(images)} image(s) ignorée(s), embedding calculé sur {len(embed_list)}.")
 
             # Average all embeddings and re-normalize to unit sphere
             mean_emb = np.mean(embed_list, axis=0)
@@ -82,10 +87,13 @@ class GalleryManager:
             self.embeddings.append({
                 'embedding': mean_emb,
                 'identity': identity,
-                'path': os.path.join(id_path, images[0])  # first image for UI display
+                'path': os.path.join(id_path, images[0])
             })
 
-        print(f"Gallery refreshed: {len(self.embeddings)} identities loaded (mean embeddings).")
+        skipped = len(self.skipped_identities)
+        loaded  = len(self.embeddings)
+        print(f"Gallery refreshed: {loaded}/{total} identités chargées" +
+              (f" ({skipped} ignorées — voir warnings ci-dessus)." if skipped else "."))
 
     def search(self, probe_embedding: np.ndarray, top_k: int = 5) -> List[Dict]:
         """

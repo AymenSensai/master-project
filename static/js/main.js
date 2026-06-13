@@ -66,6 +66,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     switchMode('dashboard');
 
+    function resetResult() {
+        resultContainer.hidden = true;
+        resultContainer.classList.remove('match', 'mismatch');
+        resultStatus.textContent = '';
+        resultMessage.textContent = '';
+        similarityFill.style.width = '0%';
+        similarityValue.textContent = '0%';
+        xaiSection.hidden = true;
+        xaiOriginal.src = '';
+        xaiHeatmap.src = '';
+    }
+
     function switchMode(mode) {
         currentMode = mode;
         document.body.className = `${mode}-mode`;
@@ -89,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (faceCanvas) faceCanvas.hidden = true;
         visUpload.querySelector('.upload-placeholder').style.opacity = '';
         nirUpload.querySelector('.upload-placeholder').style.opacity = '';
-        resultContainer.hidden = true;
+        resetResult();
 
         const comparisonGrid = document.querySelector('.comparison-grid');
         const actionSection = document.querySelector('.action-section');
@@ -259,9 +271,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.error) throw new Error(data.error);
 
             statIdentities.textContent = data.identities;
+            document.getElementById('stat-identities-disk').textContent = data.identities_on_disk;
             statVis.textContent = data.vis_images;
             statNir.textContent = data.nir_images;
             statDevice.textContent = data.device;
+
+            const skippedRow = document.getElementById('stat-skipped-row');
+            const skippedEl  = document.getElementById('stat-skipped');
+            if (data.identities_skipped > 0) {
+                skippedEl.textContent = data.identities_skipped;
+                skippedRow.style.display = '';
+                skippedRow.title = data.skipped_details
+                    .map(s => `${s.identity} (${s.reason})`)
+                    .join('\n');
+            } else {
+                skippedRow.style.display = 'none';
+            }
         } catch (error) {
             console.error('Error loading dashboard:', error);
         }
@@ -282,9 +307,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = document.createElement('div');
                 card.className = 'gallery-item';
                 card.innerHTML = `
-                    <img src="${item.image_url}" alt="${item.identity}">
+                    <img src="${item.thumbnail_url}" alt="${item.identity}" loading="lazy">
                     <div class="info"><span class="name">${item.identity}</span></div>
                 `;
+                const img = card.querySelector('img');
+                img.addEventListener('load', () => img.classList.add('loaded'));
+                if (img.complete) img.classList.add('loaded');
                 galleryGrid.appendChild(card);
             });
         } catch (error) {
@@ -371,7 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function performVerification() {
         if (!visFile || !nirFile) return;
         setLoading(true, 'ANALYSE EN COURS...');
-        resultContainer.hidden = true;
+        resetResult();
 
         const formData = new FormData();
         formData.append('vis_image', visFile);
@@ -393,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function performRecognition() {
         if (!nirFile) return;
         setLoading(true, 'RECONNAISSANCE EN COURS...');
-        resultContainer.hidden = true;
+        resetResult();
 
         const formData = new FormData();
         formData.append('image', nirFile);
